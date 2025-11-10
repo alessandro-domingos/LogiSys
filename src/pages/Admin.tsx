@@ -275,11 +275,14 @@ const Admin = () => {
 
                     <div className="flex items-center gap-4">
                       <div className="flex gap-2">
-                        {user.roles.map(role => (
-                          <Badge key={role} variant={getRoleBadgeVariant(role)}>
-                            {getRoleLabel(role)}
+                        {/* Exibe apenas a role principal (user.roles[0]) */}
+                        {user.roles[0] ? (
+                          <Badge variant={getRoleBadgeVariant(user.roles[0])}>
+                            {getRoleLabel(user.roles[0])}
                           </Badge>
-                        ))}
+                        ) : (
+                          <Badge variant="outline">{getRoleLabel('cliente')}</Badge>
+                        )}
                       </div>
                       
                       <Select
