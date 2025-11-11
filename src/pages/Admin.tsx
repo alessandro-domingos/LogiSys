@@ -2,7 +2,6 @@ import { useState, useEffect } from "react";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -88,7 +87,7 @@ const Admin = () => {
 
       if (data?.success) {
         toast({
-          title: "Usuário criado com sucesso!!",
+          title: "Usuário criado com sucesso!",
           description: `${newUserNome} foi adicionado ao sistema com a role ${newUserRole}`
         });
         
@@ -125,16 +124,6 @@ const Admin = () => {
         description: "Permissões do usuário foram atualizadas"
       });
       fetchUsers();
-    }
-  };
-
-  const getRoleBadgeVariant = (role: string) => {
-    switch (role) {
-      case 'admin': return 'default';
-      case 'logistica': return 'secondary';
-      case 'armazem': return 'outline';
-      case 'comercial': return 'outline';
-      default: return 'outline';
     }
   };
 
@@ -272,33 +261,21 @@ const Admin = () => {
                       </p>
                     </div>
 
-                    <div className="flex items-center gap-4">
-                      <div className="flex gap-2">
-                        {user.role ? (
-                          <Badge variant={getRoleBadgeVariant(user.role)}>
-                            {getRoleLabel(user.role)}
-                          </Badge>
-                        ) : (
-                          <Badge variant="outline">{getRoleLabel('cliente')}</Badge>
-                        )}
-                      </div>
-                      
-                      <Select
-                        value={user.role || 'cliente'}
-                        onValueChange={(value) => handleUpdateUserRole(user.id, value as UserRole)}
-                      >
-                        <SelectTrigger className="w-[150px]">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="admin">Administrador</SelectItem>
-                          <SelectItem value="logistica">Logística</SelectItem>
-                          <SelectItem value="armazem">Armazém</SelectItem>
-                          <SelectItem value="comercial">Comercial</SelectItem>
-                          <SelectItem value="cliente">Cliente</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
+                    <Select
+                      value={user.role || 'cliente'}
+                      onValueChange={(value) => handleUpdateUserRole(user.id, value as UserRole)}
+                    >
+                      <SelectTrigger className="w-[180px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="admin">Administrador</SelectItem>
+                        <SelectItem value="logistica">Logística</SelectItem>
+                        <SelectItem value="armazem">Armazém</SelectItem>
+                        <SelectItem value="comercial">Comercial</SelectItem>
+                        <SelectItem value="cliente">Cliente</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                 ))}
               </div>
