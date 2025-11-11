@@ -15,7 +15,7 @@ interface AuthContextType {
   signIn: (email: string, password: string) => Promise<{ error: any }>;
   signUp: (email: string, password: string, nome: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
-  userRoles: string[];
+  userRole: string | null;
   hasRole: (role: string) => boolean;
 }
 
@@ -25,49 +25,46 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
-  const [userRoles, setUserRoles] = useState<string[]>([]);
+  const [userRole, setUserRole] = useState<string | null>(null);
   const { toast } = useToast();
 
+  const fetchUserRole = async (userId: string) => {
+    const { data, error } = await supabase
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (error) {
+      console.error('Erro ao buscar role:', error);
+      setUserRole(null);
+      return;
+    }
+
+    setUserRole(data?.role ?? null);
+  };
+
   useEffect(() => {
-    // Setup auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
         setSession(session);
         setUser(session?.user ?? null);
         
         if (session?.user) {
-          // Fetch user roles after auth state changes
-          setTimeout(async () => {
-            const { data: roles } = await supabase
-              .from('user_roles')
-              .select('role')
-              .eq('user_id', session.user.id);
-            
-            if (roles) {
-              setUserRoles(roles.map(r => r.role));
-            }
-          }, 0);
+          fetchUserRole(session.user.id);
         } else {
-          setUserRoles([]);
+          setUserRole(null);
         }
       }
     );
 
-    // Check existing session and fetch roles
     const initializeAuth = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       setSession(session);
       setUser(session?.user ?? null);
       
       if (session?.user) {
-        const { data: roles } = await supabase
-          .from('user_roles')
-          .select('role')
-          .eq('user_id', session.user.id);
-        
-        if (roles) {
-          setUserRoles(roles.map(r => r.role));
-        }
+        await fetchUserRole(session.user.id);
       }
       
       setLoading(false);
@@ -79,7 +76,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const signIn = async (email: string, password: string) => {
-    // Validate inputs
     const emailResult = emailSchema.safeParse(email);
     const passwordResult = passwordSchema.safeParse(password);
     
@@ -109,7 +105,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const signUp = async (email: string, password: string, nome: string) => {
-    // Validate inputs
     const emailResult = emailSchema.safeParse(email);
     const passwordResult = passwordSchema.safeParse(password);
     const nomeResult = nomeSchema.safeParse(nome);
@@ -154,14 +149,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const signOut = async () => {
     await supabase.auth.signOut();
-    setUserRoles([]);
+    setUserRole(null);
     toast({
       title: "Logout realizado",
       description: "Até logo!"
     });
   };
 
-  const hasRole = (role: string) => userRoles.includes(role);
+  const hasRole = (role: string) => userRole === role;
 
   return (
     <AuthContext.Provider value={{
@@ -171,7 +166,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       signIn,
       signUp,
       signOut,
-      userRoles,
+      userRole,
       hasRole
     }}>
       {children}

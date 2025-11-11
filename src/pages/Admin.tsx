@@ -20,7 +20,7 @@ interface User {
   nome: string;
   email: string;
   created_at: string;
-  roles: string[];
+  role: string | null;
 }
 
 const Admin = () => {
@@ -47,7 +47,7 @@ const Admin = () => {
       nome: u.nome,
       email: u.email,
       created_at: u.created_at,
-      roles: u.roles || []
+      role: Array.isArray(u.roles) ? u.roles[0] ?? null : u.role ?? null
     }));
     setUsers(usersMapped);
     setLoading(false);
@@ -88,7 +88,7 @@ const Admin = () => {
 
       if (data?.success) {
         toast({
-          title: "Usuário criado com sucesso!",
+          title: "Usuário criado com sucesso!!",
           description: `${newUserNome} foi adicionado ao sistema com a role ${newUserRole}`
         });
         
@@ -98,7 +98,6 @@ const Admin = () => {
         setNewUserRole("cliente");
         setDialogOpen(false);
         
-        // Aguardar um pouco antes de recarregar a lista
         await new Promise(resolve => setTimeout(resolve, 500));
         fetchUsers();
       }
@@ -166,7 +165,7 @@ const Admin = () => {
         </Card>
       </div>
     );
-  }
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -275,10 +274,9 @@ const Admin = () => {
 
                     <div className="flex items-center gap-4">
                       <div className="flex gap-2">
-                        {/* Exibe apenas a role principal (user.roles[0]) */}
-                        {user.roles[0] ? (
-                          <Badge variant={getRoleBadgeVariant(user.roles[0])}>
-                            {getRoleLabel(user.roles[0])}
+                        {user.role ? (
+                          <Badge variant={getRoleBadgeVariant(user.role)}>
+                            {getRoleLabel(user.role)}
                           </Badge>
                         ) : (
                           <Badge variant="outline">{getRoleLabel('cliente')}</Badge>
@@ -286,7 +284,7 @@ const Admin = () => {
                       </div>
                       
                       <Select
-                        value={user.roles[0] || 'cliente'}
+                        value={user.role || 'cliente'}
                         onValueChange={(value) => handleUpdateUserRole(user.id, value as UserRole)}
                       >
                         <SelectTrigger className="w-[150px]">

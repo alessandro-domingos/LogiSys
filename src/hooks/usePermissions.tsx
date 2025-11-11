@@ -23,13 +23,14 @@ export interface Permission {
 }
 
 export const usePermissions = () => {
-  const { userRoles } = useAuth();
+  const { userRole } = useAuth();
   const [permissions, setPermissions] = useState<Record<Resource, Permission>>({} as any);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchPermissions = async () => {
-      if (userRoles.length === 0) {
+      if (!userRole) {
+        setPermissions({} as any);
         setLoading(false);
         return;
       }
@@ -37,26 +38,18 @@ export const usePermissions = () => {
       const { data, error } = await supabase
         .from('role_permissions')
         .select('*')
-        .in('role', userRoles as UserRole[]);
+        .eq('role', userRole as UserRole);
 
       if (!error && data) {
         const permsMap: Record<string, Permission> = {};
         
         data.forEach(perm => {
-          if (!permsMap[perm.resource]) {
-            permsMap[perm.resource] = {
-              can_create: false,
-              can_read: false,
-              can_update: false,
-              can_delete: false
-            };
-          }
-          
-          // Combinar permissões (se usuário tem múltiplas roles, usar a mais permissiva)
-          permsMap[perm.resource].can_create = permsMap[perm.resource].can_create || perm.can_create;
-          permsMap[perm.resource].can_read = permsMap[perm.resource].can_read || perm.can_read;
-          permsMap[perm.resource].can_update = permsMap[perm.resource].can_update || perm.can_update;
-          permsMap[perm.resource].can_delete = permsMap[perm.resource].can_delete || perm.can_delete;
+          permsMap[perm.resource] = {
+            can_create: !!perm.can_create,
+            can_read: !!perm.can_read,
+            can_update: !!perm.can_update,
+            can_delete: !!perm.can_delete
+          };
         });
 
         setPermissions(permsMap as any);
@@ -66,7 +59,7 @@ export const usePermissions = () => {
     };
 
     fetchPermissions();
-  }, [userRoles]);
+  }, [userRole]);
 
   const canAccess = (resource: Resource, action: 'create' | 'read' | 'update' | 'delete' = 'read'): boolean => {
     const perm = permissions[resource];
