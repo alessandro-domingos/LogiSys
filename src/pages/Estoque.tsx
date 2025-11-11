@@ -1,4 +1,6 @@
 import { useState, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -14,13 +16,31 @@ type StockStatus = "normal" | "baixo";
 type Unidade = "t" | "kg";
 
 interface StockItem {
-  id: number;
+  id: string; // UUID agora
   produto: string;
   armazem: string;
   quantidade: number;
-  unidade: Unidade;
+  unidade: string;
   status: StockStatus;
-  data: string; // dd/mm/yyyy
+  data: string; // formato ISO ou timestamp
+  produto_id?: string;
+  armazem_id?: string;
+}
+
+interface SupabaseEstoqueItem {
+  id: string;
+  quantidade: number;
+  updated_at: string;
+  produto: {
+    id: string;
+    nome: string;
+    unidade: string;
+  } | null;
+  armazem: {
+    id: string;
+    nome: string;
+    cidade: string;
+  } | null;
 }
 
 const computeStatus = (qtd: number): StockStatus => (qtd < 10 ? "baixo" : "normal");
@@ -32,13 +52,40 @@ const parseDate = (d: string) => {
 const Estoque = () => {
   const { toast } = useToast();
 
-  const [estoque, setEstoque] = useState<StockItem[]>([
-    { id: 1, produto: "Ureia", armazem: "São Paulo", quantidade: 45.5, unidade: "t", status: "normal", data: "17/01/2024" },
-    { id: 2, produto: "NPK 20-05-20", armazem: "Rio de Janeiro", quantidade: 32.0, unidade: "t", status: "normal", data: "18/01/2024" },
-    { id: 3, produto: "Ureia", armazem: "Belo Horizonte", quantidade: 8.5, unidade: "t", status: "baixo", data: "18/01/2024" },
-    { id: 4, produto: "Super Simples", armazem: "São Paulo", quantidade: 67.2, unidade: "t", status: "normal", data: "19/01/2024" },
-    { id: 5, produto: "MAP", armazem: "Curitiba", quantidade: 23.8, unidade: "t", status: "normal", data: "19/01/2024" },
-  ]);
+  const { data: estoqueData, isLoading, error } = useQuery({
+    queryKey: ["estoque"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("estoque")
+        .select(`
+          id,
+          quantidade,
+          updated_at,
+          produto:produtos(id, nome, unidade),
+          armazem:armazens(id, nome, cidade)
+        `)
+        .order("updated_at", { ascending: false });
+      
+      if (error) throw error;
+      return data;
+    },
+    refetchInterval: 30000, // Atualiza a cada 30s
+  });
+
+  const estoque = useMemo(() => {
+    if (!estoqueData) return [];
+    return estoqueData.map((item: SupabaseEstoqueItem) => ({
+      id: item.id,
+      produto: item.produto?.nome || "N/A",
+      armazem: item.armazem?.cidade || item.armazem?.nome || "N/A",
+      quantidade: item.quantidade,
+      unidade: item.produto?.unidade || "t",
+      status: (item.quantidade < 10 ? "baixo" : "normal") as StockStatus,
+      data: new Date(item.updated_at).toLocaleDateString("pt-BR"),
+      produto_id: item.produto?.id,
+      armazem_id: item.armazem?.id,
+    }));
+  }, [estoqueData]);
 
   // Dialog "Novo Produto"
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -54,34 +101,9 @@ const Estoque = () => {
   };
 
   const handleCreateProduto = () => {
-    const { nome, armazem, quantidade, unidade } = novoProduto;
-
-    if (!nome.trim() || !armazem.trim() || !quantidade) {
-      toast({ variant: "destructive", title: "Preencha todos os campos", description: "Nome, armazém e quantidade são obrigatórios." });
-      return;
-    }
-
-    const qtdNum = Number(quantidade);
-    if (Number.isNaN(qtdNum) || qtdNum <= 0) {
-      toast({ variant: "destructive", title: "Quantidade inválida", description: "Informe um número maior que zero." });
-      return;
-    }
-
-    const novoId = Math.max(0, ...estoque.map((e) => e.id)) + 1;
-    const item: StockItem = {
-      id: novoId,
-      produto: nome.trim(),
-      armazem: armazem.trim(),
-      quantidade: qtdNum,
-      unidade,
-      status: computeStatus(qtdNum),
-      data: new Date().toLocaleDateString("pt-BR"),
-    };
-
-    setEstoque((prev) => [item, ...prev]);
-    toast({ title: "Produto criado", description: `${item.produto} adicionado em ${item.armazem} com ${item.quantidade} ${item.unidade}.` });
-    resetFormNovoProduto();
-    setDialogOpen(false);
+    // Functionality disabled - button is disabled in UI
+    // TODO: Implement real Supabase INSERT when this feature is enabled
+    toast({ variant: "destructive", title: "Funcionalidade desabilitada", description: "Adicionar novos produtos ainda não está implementado." });
   };
 
   /* ---------------- Filtros (compacto + colapsável) ---------------- */
@@ -139,6 +161,29 @@ const Estoque = () => {
     (selectedWarehouses.length ? 1 : 0) +
     ((dateFrom || dateTo) ? 1 : 0);
 
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <PageHeader title="Controle de Estoque" description="Carregando..." actions={<></>} />
+        <div className="container mx-auto px-6 py-8 text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+          <p className="mt-4 text-muted-foreground">Carregando estoque...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-background">
+        <PageHeader title="Controle de Estoque" description="Erro ao carregar dados" actions={<></>} />
+        <div className="container mx-auto px-6 py-8 text-center">
+          <p className="text-destructive">Erro: {(error as Error).message}</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <PageHeader
@@ -147,7 +192,7 @@ const Estoque = () => {
         actions={
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
-              <Button className="bg-gradient-primary">
+              <Button className="bg-gradient-primary" disabled={true}>
                 <Plus className="mr-2 h-4 w-4" />
                 Novo Produto
               </Button>
