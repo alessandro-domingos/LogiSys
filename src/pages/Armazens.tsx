@@ -94,6 +94,8 @@ const Armazens = () => {
       toast({ title: "Armazém criado com sucesso!" });
       resetForm();
       setDialogOpen(false);
+      queryClient.invalidateQueries({ queryKey: ["armazens-filtro"] });
+      queryClient.invalidateQueries({ queryKey: ["armazens-ativos"] });
       queryClient.invalidateQueries({ queryKey: ["armazens"] });
     } catch (err: unknown) {
       toast({
@@ -120,6 +122,8 @@ const Armazens = () => {
 
       console.log("✅ [SUCCESS] Status do armazém atualizado");
       toast({ title: "Status atualizado com sucesso!" });
+      queryClient.invalidateQueries({ queryKey: ["armazens-filtro"] });
+      queryClient.invalidateQueries({ queryKey: ["armazens-ativos"] });
       queryClient.invalidateQueries({ queryKey: ["armazens"] });
     } catch (err: unknown) {
       toast({

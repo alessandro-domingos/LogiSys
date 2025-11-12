@@ -102,6 +102,27 @@ const Estoque = () => {
     },
   });
 
+  const { data: armazensParaFiltro } = useQuery({
+    queryKey: ["armazens-filtro"],
+    queryFn: async () => {
+      console.log("🔍 [DEBUG] Buscando armazéns para filtro...");
+      const { data, error } = await supabase
+        .from("armazens")
+        .select("id, cidade, estado, ativo")
+        .eq("ativo", true)
+        .order("cidade");
+      
+      if (error) {
+        console.error("❌ [ERROR] Erro ao buscar armazéns para filtro:", error);
+        return [];
+      }
+      
+      console.log("✅ [DEBUG] Armazéns para filtro carregados:", data?.length);
+      return data || [];
+    },
+    refetchInterval: 10000, // Refresh every 10 seconds
+  });
+
   // Dialog "Novo Produto"
   const [dialogOpen, setDialogOpen] = useState(false);
   const [novoProduto, setNovoProduto] = useState({
@@ -327,7 +348,14 @@ const Estoque = () => {
   const [selectedWarehouses, setSelectedWarehouses] = useState<string[]>([]);
 
   const allStatuses: StockStatus[] = ["normal", "baixo"];
-  const allWarehouses = useMemo(() => Array.from(new Set(estoque.map((e) => e.armazem))).sort(), [estoque]);
+  const allWarehouses = useMemo(() => {
+    if (!armazensParaFiltro) return [];
+    // Use cidade from armazens table, filter only active ones
+    return armazensParaFiltro
+      .filter(a => a.ativo === true)
+      .map(a => a.cidade)
+      .sort();
+  }, [armazensParaFiltro]);
 
   const toggleStatus = (st: StockStatus) => {
     setSelectedStatuses((prev) => (prev.includes(st) ? prev.filter((s) => s !== st) : [...prev, st]));
