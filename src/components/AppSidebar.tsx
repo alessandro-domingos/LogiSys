@@ -5,6 +5,7 @@ import {
   ClipboardList,
   Calendar,
   Truck,
+  Warehouse,
   LogOut,
   Settings,
 } from "lucide-react";
@@ -47,6 +48,12 @@ const menuItems = [
     url: "/agendamentos",
     icon: Calendar,
     resource: "agendamentos" as const,
+  },
+  {
+    title: "Armazéns",
+    url: "/armazens",
+    icon: Warehouse,
+    resource: "armazens" as const,
   },
   {
     title: "Carregamento",
