@@ -13,6 +13,7 @@ import Agendamentos from "./pages/Agendamentos";
 import Carregamento from "./pages/Carregamento";
 import Admin from "./pages/Admin";
 import Armazens from "./pages/Armazens";
+import Clientes from "./pages/Clientes";
 import AuthPage from "./pages/AuthPage";
 import NotFound from "./pages/NotFound";
 import type { Resource } from "./hooks/usePermissions";
@@ -116,6 +117,16 @@ const App = () => (
                 <ProtectedRoute resource="armazens">
                   <Layout>
                     <Armazens />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/clientes"
+              element={
+                <ProtectedRoute resource="clientes">
+                  <Layout>
+                    <Clientes />
                   </Layout>
                 </ProtectedRoute>
               }

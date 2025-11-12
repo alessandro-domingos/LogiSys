@@ -6,6 +6,7 @@ import {
   Calendar,
   Truck,
   Warehouse,
+  Users,
   LogOut,
   Settings,
 } from "lucide-react";
@@ -60,6 +61,12 @@ const menuItems = [
     url: "/carregamento",
     icon: Truck,
     resource: "carregamentos" as const,
+  },
+  {
+    title: "Clientes",
+    url: "/clientes",
+    icon: Users,
+    resource: "clientes" as const,
   },
   {
     title: "Administração",

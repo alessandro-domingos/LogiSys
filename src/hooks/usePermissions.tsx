@@ -13,7 +13,8 @@ export type Resource =
   | 'armazens' 
   | 'liberacoes' 
   | 'agendamentos' 
-  | 'carregamentos';
+  | 'carregamentos'
+  | 'clientes';
 
 export interface Permission {
   can_create: boolean;
