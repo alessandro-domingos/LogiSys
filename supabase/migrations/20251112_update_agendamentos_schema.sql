@@ -32,7 +32,7 @@ ALTER TABLE public.agendamentos
     (produto_id IS NOT NULL AND armazem_id IS NOT NULL AND cliente_nome IS NOT NULL AND pedido_interno IS NOT NULL)
   );
 
--- Update RLS policies to allow admin and logistica to create agendamentos
+-- Update RLS policies to allow logistica and clientes to create agendamentos
 DROP POLICY IF EXISTS "Clientes podem criar agendamentos" ON public.agendamentos;
 
 CREATE POLICY "Usuarios autorizados podem criar agendamentos"
@@ -40,16 +40,14 @@ CREATE POLICY "Usuarios autorizados podem criar agendamentos"
   TO authenticated
   WITH CHECK (
     public.has_role(auth.uid(), 'cliente'::user_role) OR 
-    public.has_role(auth.uid(), 'logistica'::user_role) OR
-    public.has_role(auth.uid(), 'admin'::user_role)
+    public.has_role(auth.uid(), 'logistica'::user_role)
   );
 
--- Allow logistica and admin to update agendamentos
-CREATE POLICY "Logistica e admin podem atualizar agendamentos"
+-- Allow logistica to update all agendamentos, users can update their own
+CREATE POLICY "Logistica e criadores podem atualizar agendamentos"
   ON public.agendamentos FOR UPDATE
   TO authenticated
   USING (
     public.has_role(auth.uid(), 'logistica'::user_role) OR
-    public.has_role(auth.uid(), 'admin'::user_role) OR
     created_by = auth.uid()
   );

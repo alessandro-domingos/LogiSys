@@ -513,7 +513,7 @@ const Agendamentos = () => {
                       </div>
                       <div>
                         <h3 className="font-semibold text-foreground">{ag.cliente}</h3>
-                        <p className="text-sm text-muted-foreground">{ag.produto} - {ag.quantidade}t</p>
+                        <p className="text-sm text-muted-foreground">{ag.produto} - {ag.quantidade}t • {ag.armazem}</p>
                         <p className="text-xs text-muted-foreground">Pedido: <span className="font-medium text-foreground">{ag.pedido}</span></p>
                         <p className="text-xs text-muted-foreground">Data: {ag.data} • {ag.horario}</p>
                       </div>
