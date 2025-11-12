@@ -90,6 +90,18 @@ const Estoque = () => {
     }));
   }, [estoqueData]);
 
+  const { data: armazensAtivos } = useQuery({
+    queryKey: ["armazens-ativos"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("armazens")
+        .select("id, nome, cidade, estado")
+        .eq("ativo", true)
+        .order("cidade");
+      return data || [];
+    },
+  });
+
   // Dialog "Novo Produto"
   const [dialogOpen, setDialogOpen] = useState(false);
   const [novoProduto, setNovoProduto] = useState({
@@ -159,14 +171,14 @@ const Estoque = () => {
         produtoId = novoProd!.id;
       }
 
-      // 2. Buscar armazém pelo nome/cidade
-      console.log("🔍 [DEBUG] Buscando armazém:", armazem.trim());
-      
+      // 2. Buscar armazém pelo ID (agora é select, não mais busca por nome)
+      console.log("🔍 [DEBUG] Buscando armazém:", armazem);
+
       const { data: armazemData, error: errArmazem } = await supabase
         .from("armazens")
-        .select("id, nome, cidade")
-        .or(`nome.ilike.%${armazem.trim()}%,cidade.ilike.%${armazem.trim()}%`)
-        .limit(1)
+        .select("id, nome, cidade, estado")
+        .eq("id", armazem)
+        .eq("ativo", true)
         .maybeSingle();
 
       if (errArmazem) {
@@ -175,28 +187,43 @@ const Estoque = () => {
       }
 
       if (!armazemData) {
-        console.error("❌ [ERROR] Armazém não encontrado:", armazem);
-        toast({ 
-          variant: "destructive", 
-          title: "Armazém não encontrado",
-          description: `Não foi possível encontrar o armazém "${armazem}". Verifique o nome.`
-        });
+        toast({ variant: "destructive", title: "Armazém não encontrado ou inativo" });
         return;
       }
 
       console.log("✅ [DEBUG] Armazém encontrado:", armazemData);
 
-      // 3. Inserir/atualizar estoque
-      console.log("🔍 [DEBUG] Inserindo/atualizando estoque...");
-      
+      // 3. Buscar estoque atual
+      console.log("🔍 [DEBUG] Buscando estoque atual...");
+
+      const { data: estoqueAtual, error: errBuscaEstoque } = await supabase
+        .from("estoque")
+        .select("quantidade")
+        .eq("produto_id", produtoId)
+        .eq("armazem_id", armazemData.id)
+        .maybeSingle();
+
+      if (errBuscaEstoque) {
+        console.error("❌ [ERROR] Erro ao buscar estoque:", errBuscaEstoque);
+        throw new Error(`Erro ao buscar estoque: ${errBuscaEstoque.message}`);
+      }
+
+      const estoqueAnterior = estoqueAtual?.quantidade || 0;
+      const novaQuantidade = estoqueAnterior + qtdNum;
+
+      console.log("✅ [DEBUG] Estoque anterior:", estoqueAnterior, "| Entrada:", qtdNum, "| Novo total:", novaQuantidade);
+
+      // 4. Inserir/atualizar estoque com quantidade SOMADA
+      console.log("🔍 [DEBUG] Atualizando estoque...");
+
       const { data: userData } = await supabase.auth.getUser();
-      
+
       const { data: estoqueData, error: errEstoque } = await supabase
         .from("estoque")
         .upsert({
           produto_id: produtoId,
           armazem_id: armazemData.id,
-          quantidade: qtdNum,
+          quantidade: novaQuantidade, // ✅ SOMA
           updated_by: userData.user?.id,
           updated_at: new Date().toISOString(),
         }, {
@@ -205,15 +232,15 @@ const Estoque = () => {
         .select();
 
       if (errEstoque) {
-        console.error("❌ [ERROR] Erro ao inserir estoque:", errEstoque);
+        console.error("❌ [ERROR] Erro ao atualizar estoque:", errEstoque);
         throw new Error(`Erro ao atualizar estoque: ${errEstoque.message} (${errEstoque.code || 'N/A'})`);
       }
 
       console.log("✅ [SUCCESS] Estoque atualizado:", estoqueData);
 
       toast({ 
-        title: "Produto adicionado com sucesso!", 
-        description: `${nome} adicionado em ${armazemData.cidade || armazemData.nome} com ${qtdNum} ${unidade}.` 
+        title: "Entrada registrada!", 
+        description: `+${qtdNum}t de ${nome} em ${armazemData.cidade}/${armazemData.estado}. Estoque atual: ${novaQuantidade}t` 
       });
 
       resetFormNovoProduto();
@@ -382,12 +409,12 @@ const Estoque = () => {
                 disabled={!hasRole("logistica") && !hasRole("admin")}
               >
                 <Plus className="mr-2 h-4 w-4" />
-                Novo Produto
+                Entrada de Estoque
               </Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Novo Produto</DialogTitle>
+                <DialogTitle>Registrar Entrada de Estoque</DialogTitle>
               </DialogHeader>
               <div className="space-y-3 py-1">
                 <div className="space-y-2">
@@ -395,13 +422,32 @@ const Estoque = () => {
                   <Input id="nome" value={novoProduto.nome} onChange={(e) => setNovoProduto((s) => ({ ...s, nome: e.target.value }))} placeholder="Ex.: Ureia, MAP, NPK 20-05-20" />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="armazem">Armazém</Label>
-                  <Input id="armazem" value={novoProduto.armazem} onChange={(e) => setNovoProduto((s) => ({ ...s, armazem: e.target.value }))} placeholder="Ex.: São Paulo, Curitiba" />
+                  <Label htmlFor="armazem">Armazém *</Label>
+                  <Select value={novoProduto.armazem} onValueChange={(v) => setNovoProduto((s) => ({ ...s, armazem: v }))}>
+                    <SelectTrigger id="armazem">
+                      <SelectValue placeholder="Selecione o armazém" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {armazensAtivos?.map((a) => (
+                        <SelectItem key={a.id} value={a.id}>
+                          {a.cidade}/{a.estado} - {a.nome}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-2">
-                    <Label htmlFor="quantidade">Quantidade</Label>
-                    <Input id="quantidade" type="number" step="0.01" min="0" value={novoProduto.quantidade} onChange={(e) => setNovoProduto((s) => ({ ...s, quantidade: e.target.value }))} placeholder="Ex.: 10.5" />
+                    <Label htmlFor="quantidade">Quantidade a adicionar (t) *</Label>
+                    <Input 
+                      id="quantidade" 
+                      type="number" 
+                      step="0.01" 
+                      min="0" 
+                      placeholder="Ex: 20.5 (será somado ao estoque atual)"
+                      value={novoProduto.quantidade} 
+                      onChange={(e) => setNovoProduto((s) => ({ ...s, quantidade: e.target.value }))} 
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="unidade">Unidade</Label>
