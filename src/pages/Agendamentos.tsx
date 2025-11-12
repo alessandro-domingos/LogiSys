@@ -30,28 +30,36 @@ interface AgendamentoItem {
   status: AgendamentoStatus;
   produto_id?: string;
   armazem_id?: string;
+  liberacao_id?: string;
 }
 
 interface SupabaseAgendamentoItem {
   id: string;
-  cliente_nome: string;
-  data_agendamento: string;
-  hora_agendamento: string;
-  placa_veiculo: string;
+  data_retirada: string;
+  horario: string;
+  quantidade: number;
   motorista_nome: string;
   motorista_documento: string;
-  pedido_interno: string;
-  quantidade: number;
+  placa_caminhao: string;
+  tipo_caminhao?: string;
   status: string;
+  observacoes?: string;
   created_at: string;
-  produto: {
+  liberacao?: {
     id: string;
-    nome: string;
-  } | null;
-  armazem: {
-    id: string;
-    nome: string;
-    cidade: string;
+    cliente_nome: string;
+    pedido_interno: string;
+    quantidade_liberada: number;
+    produto: {
+      id: string;
+      nome: string;
+    } | null;
+    armazem: {
+      id: string;
+      nome: string;
+      cidade: string;
+      estado: string;
+    } | null;
   } | null;
 }
 
@@ -75,18 +83,24 @@ const Agendamentos = () => {
         .from("agendamentos")
         .select(`
           id,
-          cliente_nome,
-          data_agendamento,
-          hora_agendamento,
-          placa_veiculo,
+          data_retirada,
+          horario,
+          quantidade,
           motorista_nome,
           motorista_documento,
-          pedido_interno,
-          quantidade,
+          placa_caminhao,
+          tipo_caminhao,
           status,
+          observacoes,
           created_at,
-          produto:produtos(id, nome),
-          armazem:armazens(id, nome, cidade)
+          liberacao:liberacoes(
+            id,
+            cliente_nome,
+            pedido_interno,
+            quantidade_liberada,
+            produto:produtos(id, nome),
+            armazem:armazens(id, nome, cidade, estado)
+          )
         `)
         .order("created_at", { ascending: false });
       
@@ -104,138 +118,137 @@ const Agendamentos = () => {
     if (!agendamentosData) return [];
     return agendamentosData.map((item: SupabaseAgendamentoItem) => ({
       id: item.id,
-      cliente: item.cliente_nome,
-      produto: item.produto?.nome || "N/A",
-      armazem: item.armazem?.cidade || item.armazem?.nome || "N/A",
+      cliente: item.liberacao?.cliente_nome || "N/A",
+      produto: item.liberacao?.produto?.nome || "N/A",
       quantidade: item.quantidade,
-      data: item.data_agendamento ? new Date(item.data_agendamento).toLocaleDateString("pt-BR") : "N/A",
-      horario: item.hora_agendamento ? item.hora_agendamento.substring(0, 5) : "N/A",
-      placa: item.placa_veiculo,
-      motorista: item.motorista_nome,
-      documento: item.motorista_documento,
-      pedido: item.pedido_interno,
+      data: new Date(item.data_retirada).toLocaleDateString("pt-BR"),
+      horario: item.horario || "00:00",
+      placa: item.placa_caminhao || "N/A",
+      motorista: item.motorista_nome || "N/A",
+      documento: item.motorista_documento || "N/A",
+      pedido: item.liberacao?.pedido_interno || "N/A",
       status: item.status as AgendamentoStatus,
-      produto_id: item.produto?.id,
-      armazem_id: item.armazem?.id,
+      armazem: item.liberacao?.armazem?.cidade || item.liberacao?.armazem?.estado,
+      produto_id: item.liberacao?.produto?.id,
+      armazem_id: item.liberacao?.armazem?.id,
+      liberacao_id: item.liberacao?.id,
     }));
   }, [agendamentosData]);
 
   // Dialog "Novo Agendamento"
   const [dialogOpen, setDialogOpen] = useState(false);
   const [novoAgendamento, setNovoAgendamento] = useState({
-    produto: "",
-    armazem: "",
-    cliente: "",
-    pedido: "",
+    liberacao: "",
     quantidade: "",
     data: "",
     horario: "",
     placa: "",
     motorista: "",
     documento: "",
+    tipoCaminhao: "",
+    observacoes: "",
   });
 
-  // Buscar produtos e armazéns para selects
-  const { data: produtos } = useQuery({
-    queryKey: ["produtos-list"],
+  // Buscar liberações pendentes para o formulário
+  const { data: liberacoesPendentes } = useQuery({
+    queryKey: ["liberacoes-pendentes"],
     queryFn: async () => {
-      const { data } = await supabase
-        .from("produtos")
-        .select("id, nome")
-        .eq("ativo", true)
-        .order("nome");
-      return data || [];
-    },
-  });
-
-  const { data: armazens } = useQuery({
-    queryKey: ["armazens-list"],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("armazens")
-        .select("id, nome, cidade, estado")
-        .eq("ativo", true)
-        .order("cidade");
+      console.log("🔍 [DEBUG] Buscando liberações pendentes...");
+      const { data, error } = await supabase
+        .from("liberacoes")
+        .select(`
+          id,
+          cliente_nome,
+          pedido_interno,
+          quantidade_liberada,
+          quantidade_retirada,
+          produto:produtos(nome),
+          armazem:armazens(cidade, estado)
+        `)
+        .in("status", ["pendente", "parcial"])
+        .order("created_at", { ascending: false });
+      
+      if (error) throw error;
+      console.log("✅ [DEBUG] Liberações pendentes:", data?.length);
       return data || [];
     },
   });
 
   const resetFormNovoAgendamento = () => {
     setNovoAgendamento({
-      produto: "",
-      armazem: "",
-      cliente: "",
-      pedido: "",
+      liberacao: "",
       quantidade: "",
       data: "",
       horario: "",
       placa: "",
       motorista: "",
       documento: "",
+      tipoCaminhao: "",
+      observacoes: "",
     });
   };
 
   const handleCreateAgendamento = async () => {
-    const { produto, armazem, cliente, pedido, quantidade, data, horario, placa, motorista, documento } = novoAgendamento;
+    const { liberacao, quantidade, data, horario, placa, motorista, documento } = novoAgendamento;
 
-    // Validação de campos obrigatórios
-    if (!produto || !armazem || !cliente.trim() || !pedido.trim() || !quantidade || !data || !horario || !placa.trim() || !motorista.trim() || !documento.trim()) {
+    if (!liberacao || !quantidade || !data || !horario || !placa.trim() || !motorista.trim() || !documento.trim()) {
       toast({ variant: "destructive", title: "Preencha todos os campos obrigatórios" });
       return;
     }
 
-    // Validação de quantidade
     const qtdNum = Number(quantidade);
     if (Number.isNaN(qtdNum) || qtdNum <= 0) {
-      toast({ variant: "destructive", title: "Quantidade deve ser um número positivo" });
+      toast({ variant: "destructive", title: "Quantidade inválida" });
       return;
     }
 
     try {
-      console.log("🔍 [DEBUG] Criando agendamento:", { produto, armazem, cliente, pedido, quantidade: qtdNum, data, horario, placa, motorista, documento });
+      console.log("🔍 [DEBUG] Criando agendamento:", { liberacao, quantidade: qtdNum, data, horario });
 
       const { data: userData } = await supabase.auth.getUser();
       
-      const { data: agendamentoData, error: errAgendamento } = await supabase
+      const { data: agendData, error: errAgend } = await supabase
         .from("agendamentos")
         .insert({
-          produto_id: produto,
-          armazem_id: armazem,
-          cliente_nome: cliente.trim(),
-          pedido_interno: pedido.trim(),
+          liberacao_id: liberacao,
           quantidade: qtdNum,
-          data_agendamento: data,
-          hora_agendamento: horario,
-          placa_veiculo: placa.trim().toUpperCase(), // Converter para maiúsculas
+          data_retirada: data,
+          horario: horario,
+          placa_caminhao: placa.trim().toUpperCase(),
           motorista_nome: motorista.trim(),
           motorista_documento: documento.trim(),
-          status: "pendente", // Status padrão
+          tipo_caminhao: novoAgendamento.tipoCaminhao || null,
+          observacoes: novoAgendamento.observacoes || null,
+          status: "confirmado",
           created_by: userData.user?.id,
         })
         .select(`
           id,
-          cliente_nome,
-          pedido_interno,
-          produto:produtos(nome),
-          armazem:armazens(cidade)
+          data_retirada,
+          liberacao:liberacoes(
+            cliente_nome,
+            pedido_interno,
+            produto:produtos(nome)
+          )
         `)
         .single();
 
-      if (errAgendamento) {
-        console.error("❌ [ERROR] Erro ao criar agendamento:", errAgendamento);
-        throw new Error(`Erro ao criar agendamento: ${errAgendamento.message} (${errAgendamento.code || 'N/A'})`);
+      if (errAgend) {
+        console.error("❌ [ERROR] Erro ao criar agendamento:", errAgend);
+        throw new Error(`Erro ao criar agendamento: ${errAgend.message} (${errAgend.code || 'N/A'})`);
       }
 
-      console.log("✅ [SUCCESS] Agendamento criado:", agendamentoData);
+      console.log("✅ [SUCCESS] Agendamento criado:", agendData);
 
       toast({ 
         title: "Agendamento criado com sucesso!", 
-        description: `Pedido ${pedido} para ${cliente} - ${qtdNum}t de ${agendamentoData.produto?.nome}` 
+        description: `${agendData.liberacao?.cliente_nome} - ${new Date(agendData.data_retirada).toLocaleDateString("pt-BR")} - ${qtdNum}t` 
       });
 
       resetFormNovoAgendamento();
       setDialogOpen(false);
       queryClient.invalidateQueries({ queryKey: ["agendamentos"] });
+      queryClient.invalidateQueries({ queryKey: ["liberacoes-pendentes"] });
 
     } catch (err: unknown) {
       console.error("❌ [ERROR] Erro geral ao criar agendamento:", err);
@@ -325,69 +338,47 @@ const Agendamentos = () => {
                 <DialogTitle>Novo Agendamento</DialogTitle>
               </DialogHeader>
               <div className="space-y-4 py-2">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="produto">Produto *</Label>
-                    <Select value={novoAgendamento.produto} onValueChange={(v) => setNovoAgendamento((s) => ({ ...s, produto: v }))}>
-                      <SelectTrigger id="produto">
-                        <SelectValue placeholder="Selecione o produto" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {produtos?.map((p) => (
-                          <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="armazem">Armazém *</Label>
-                    <Select value={novoAgendamento.armazem} onValueChange={(v) => setNovoAgendamento((s) => ({ ...s, armazem: v }))}>
-                      <SelectTrigger id="armazem">
-                        <SelectValue placeholder="Selecione o armazém" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {armazens?.map((a) => (
-                          <SelectItem key={a.id} value={a.id}>{a.cidade} - {a.estado}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                <div className="space-y-2">
+                  <Label htmlFor="liberacao">Liberação *</Label>
+                  <Select 
+                    value={novoAgendamento.liberacao} 
+                    onValueChange={(v) => {
+                      setNovoAgendamento((s) => ({ ...s, liberacao: v }));
+                      // Auto-fill quantidade disponível
+                      const lib = liberacoesPendentes?.find((l) => l.id === v);
+                      if (lib) {
+                        const disponivel = lib.quantidade_liberada - lib.quantidade_retirada;
+                        setNovoAgendamento((s) => ({ ...s, quantidade: disponivel.toString() }));
+                      }
+                    }}
+                  >
+                    <SelectTrigger id="liberacao">
+                      <SelectValue placeholder="Selecione a liberação" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {liberacoesPendentes?.map((lib) => {
+                        const disponivel = lib.quantidade_liberada - lib.quantidade_retirada;
+                        return (
+                          <SelectItem key={lib.id} value={lib.id}>
+                            {lib.pedido_interno} - {lib.cliente_nome} - {lib.produto?.nome} ({disponivel}t disponível) - {lib.armazem?.cidade}/{lib.armazem?.estado}
+                          </SelectItem>
+                        );
+                      })}
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="cliente">Nome do Cliente *</Label>
+                  <Label htmlFor="quantidade">Quantidade (t) *</Label>
                   <Input 
-                    id="cliente" 
-                    value={novoAgendamento.cliente} 
-                    onChange={(e) => setNovoAgendamento((s) => ({ ...s, cliente: e.target.value }))} 
-                    placeholder="Ex: Cliente ABC Ltda"
+                    id="quantidade" 
+                    type="number" 
+                    step="0.01" 
+                    min="0"
+                    value={novoAgendamento.quantidade} 
+                    onChange={(e) => setNovoAgendamento((s) => ({ ...s, quantidade: e.target.value }))} 
+                    placeholder="0.00"
                   />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="pedido">Número do Pedido *</Label>
-                    <Input 
-                      id="pedido" 
-                      value={novoAgendamento.pedido} 
-                      onChange={(e) => setNovoAgendamento((s) => ({ ...s, pedido: e.target.value }))} 
-                      placeholder="Ex: PED-2024-001"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="quantidade">Quantidade (t) *</Label>
-                    <Input 
-                      id="quantidade" 
-                      type="number" 
-                      step="0.01" 
-                      min="0"
-                      value={novoAgendamento.quantidade} 
-                      onChange={(e) => setNovoAgendamento((s) => ({ ...s, quantidade: e.target.value }))} 
-                      placeholder="0.00"
-                    />
-                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
@@ -443,6 +434,26 @@ const Agendamentos = () => {
                       placeholder="Ex: 123.456.789-00"
                     />
                   </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="tipoCaminhao">Tipo de Caminhão</Label>
+                  <Input 
+                    id="tipoCaminhao" 
+                    value={novoAgendamento.tipoCaminhao} 
+                    onChange={(e) => setNovoAgendamento((s) => ({ ...s, tipoCaminhao: e.target.value }))} 
+                    placeholder="Ex: Bitrem, Carreta, Truck"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="observacoes">Observações</Label>
+                  <Input 
+                    id="observacoes" 
+                    value={novoAgendamento.observacoes} 
+                    onChange={(e) => setNovoAgendamento((s) => ({ ...s, observacoes: e.target.value }))} 
+                    placeholder="Informações adicionais sobre o agendamento"
+                  />
                 </div>
               </div>
               <DialogFooter>
