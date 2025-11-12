@@ -1,19 +1,25 @@
 import { useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Calendar, Clock, User, Truck, Plus, X, Filter as FilterIcon, ChevronDown, ChevronUp } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useToast } from "@/hooks/use-toast";
 
 type AgendamentoStatus = "confirmado" | "pendente" | "concluido" | "cancelado";
 
 interface AgendamentoItem {
-  id: number;
+  id: string; // UUID
   cliente: string;
   produto: string;
+  armazem: string;
   quantidade: number;
   data: string; // dd/mm/yyyy
   horario: string;
@@ -22,6 +28,31 @@ interface AgendamentoItem {
   documento: string;
   pedido: string;
   status: AgendamentoStatus;
+  produto_id?: string;
+  armazem_id?: string;
+}
+
+interface SupabaseAgendamentoItem {
+  id: string;
+  cliente_nome: string;
+  data_agendamento: string;
+  hora_agendamento: string;
+  placa_veiculo: string;
+  motorista_nome: string;
+  motorista_documento: string;
+  pedido_interno: string;
+  quantidade: number;
+  status: string;
+  created_at: string;
+  produto: {
+    id: string;
+    nome: string;
+  } | null;
+  armazem: {
+    id: string;
+    nome: string;
+    cidade: string;
+  } | null;
 }
 
 const parseDate = (d: string) => {
@@ -30,14 +61,192 @@ const parseDate = (d: string) => {
 };
 
 const Agendamentos = () => {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
   const { hasRole } = useAuth();
   const canCreate = hasRole("admin") || hasRole("logistica") || hasRole("cliente");
 
-  const [agendamentos] = useState<AgendamentoItem[]>([
-    { id: 1, cliente: "Cliente ABC", produto: "Ureia", quantidade: 4.0, data: "17/01/2024", horario: "14:00", placa: "ABC-1234", motorista: "João Silva", documento: "123.456.789-00", pedido: "PED-2024-001", status: "confirmado" },
-    { id: 2, cliente: "Transportadora XYZ", produto: "NPK 20-05-20", quantidade: 8.0, data: "17/01/2024", horario: "15:30", placa: "DEF-5678", motorista: "Maria Santos", documento: "987.654.321-00", pedido: "PED-2024-002", status: "confirmado" },
-    { id: 3, cliente: "Fazenda Boa Vista", produto: "Super Simples", quantidade: 12.0, data: "18/01/2024", horario: "09:00", placa: "GHI-9012", motorista: "Pedro Costa", documento: "456.789.123-00", pedido: "PED-2024-005", status: "pendente" },
-  ]);
+  // Fetch agendamentos from Supabase
+  const { data: agendamentosData, isLoading, error } = useQuery({
+    queryKey: ["agendamentos"],
+    queryFn: async () => {
+      console.log("🔍 [DEBUG] Buscando agendamentos...");
+      const { data, error } = await supabase
+        .from("agendamentos")
+        .select(`
+          id,
+          cliente_nome,
+          data_agendamento,
+          hora_agendamento,
+          placa_veiculo,
+          motorista_nome,
+          motorista_documento,
+          pedido_interno,
+          quantidade,
+          status,
+          created_at,
+          produto:produtos(id, nome),
+          armazem:armazens(id, nome, cidade)
+        `)
+        .order("created_at", { ascending: false });
+      
+      if (error) {
+        console.error("❌ [ERROR] Erro ao buscar agendamentos:", error);
+        throw error;
+      }
+      console.log("✅ [DEBUG] Agendamentos carregados:", data?.length);
+      return data;
+    },
+    refetchInterval: 30000, // Atualiza a cada 30s
+  });
+
+  const agendamentos = useMemo(() => {
+    if (!agendamentosData) return [];
+    return agendamentosData.map((item: SupabaseAgendamentoItem) => ({
+      id: item.id,
+      cliente: item.cliente_nome,
+      produto: item.produto?.nome || "N/A",
+      armazem: item.armazem?.cidade || item.armazem?.nome || "N/A",
+      quantidade: item.quantidade,
+      data: item.data_agendamento ? new Date(item.data_agendamento).toLocaleDateString("pt-BR") : "N/A",
+      horario: item.hora_agendamento ? item.hora_agendamento.substring(0, 5) : "N/A",
+      placa: item.placa_veiculo,
+      motorista: item.motorista_nome,
+      documento: item.motorista_documento,
+      pedido: item.pedido_interno,
+      status: item.status as AgendamentoStatus,
+      produto_id: item.produto?.id,
+      armazem_id: item.armazem?.id,
+    }));
+  }, [agendamentosData]);
+
+  // Dialog "Novo Agendamento"
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [novoAgendamento, setNovoAgendamento] = useState({
+    produto: "",
+    armazem: "",
+    cliente: "",
+    pedido: "",
+    quantidade: "",
+    data: "",
+    horario: "",
+    placa: "",
+    motorista: "",
+    documento: "",
+  });
+
+  // Buscar produtos e armazéns para selects
+  const { data: produtos } = useQuery({
+    queryKey: ["produtos-list"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("produtos")
+        .select("id, nome")
+        .eq("ativo", true)
+        .order("nome");
+      return data || [];
+    },
+  });
+
+  const { data: armazens } = useQuery({
+    queryKey: ["armazens-list"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("armazens")
+        .select("id, nome, cidade, estado")
+        .eq("ativo", true)
+        .order("cidade");
+      return data || [];
+    },
+  });
+
+  const resetFormNovoAgendamento = () => {
+    setNovoAgendamento({
+      produto: "",
+      armazem: "",
+      cliente: "",
+      pedido: "",
+      quantidade: "",
+      data: "",
+      horario: "",
+      placa: "",
+      motorista: "",
+      documento: "",
+    });
+  };
+
+  const handleCreateAgendamento = async () => {
+    const { produto, armazem, cliente, pedido, quantidade, data, horario, placa, motorista, documento } = novoAgendamento;
+
+    // Validação de campos obrigatórios
+    if (!produto || !armazem || !cliente.trim() || !pedido.trim() || !quantidade || !data || !horario || !placa.trim() || !motorista.trim() || !documento.trim()) {
+      toast({ variant: "destructive", title: "Preencha todos os campos obrigatórios" });
+      return;
+    }
+
+    // Validação de quantidade
+    const qtdNum = Number(quantidade);
+    if (Number.isNaN(qtdNum) || qtdNum <= 0) {
+      toast({ variant: "destructive", title: "Quantidade deve ser um número positivo" });
+      return;
+    }
+
+    try {
+      console.log("🔍 [DEBUG] Criando agendamento:", { produto, armazem, cliente, pedido, quantidade: qtdNum, data, horario, placa, motorista, documento });
+
+      const { data: userData } = await supabase.auth.getUser();
+      
+      const { data: agendamentoData, error: errAgendamento } = await supabase
+        .from("agendamentos")
+        .insert({
+          produto_id: produto,
+          armazem_id: armazem,
+          cliente_nome: cliente.trim(),
+          pedido_interno: pedido.trim(),
+          quantidade: qtdNum,
+          data_agendamento: data,
+          hora_agendamento: horario,
+          placa_veiculo: placa.trim().toUpperCase(), // Converter para maiúsculas
+          motorista_nome: motorista.trim(),
+          motorista_documento: documento.trim(),
+          status: "pendente", // Status padrão
+          created_by: userData.user?.id,
+        })
+        .select(`
+          id,
+          cliente_nome,
+          pedido_interno,
+          produto:produtos(nome),
+          armazem:armazens(cidade)
+        `)
+        .single();
+
+      if (errAgendamento) {
+        console.error("❌ [ERROR] Erro ao criar agendamento:", errAgendamento);
+        throw new Error(`Erro ao criar agendamento: ${errAgendamento.message} (${errAgendamento.code || 'N/A'})`);
+      }
+
+      console.log("✅ [SUCCESS] Agendamento criado:", agendamentoData);
+
+      toast({ 
+        title: "Agendamento criado com sucesso!", 
+        description: `Pedido ${pedido} para ${cliente} - ${qtdNum}t de ${agendamentoData.produto?.nome}` 
+      });
+
+      resetFormNovoAgendamento();
+      setDialogOpen(false);
+      queryClient.invalidateQueries({ queryKey: ["agendamentos"] });
+
+    } catch (err: unknown) {
+      console.error("❌ [ERROR] Erro geral ao criar agendamento:", err);
+      
+      toast({
+        variant: "destructive",
+        title: "Erro ao criar agendamento",
+        description: err instanceof Error ? err.message : "Erro desconhecido"
+      });
+    }
+  };
 
   /* Filtros compactos + colapsáveis */
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -75,16 +284,173 @@ const Agendamentos = () => {
   const totalCount = agendamentos.length;
   const activeAdvancedCount = (selectedStatuses.length ? 1 : 0) + ((dateFrom || dateTo) ? 1 : 0);
 
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <PageHeader title="Agendamentos de Retirada" description="Carregando..." actions={<></>} />
+        <div className="container mx-auto px-6 py-8 text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+          <p className="mt-4 text-muted-foreground">Carregando agendamentos...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-background">
+        <PageHeader title="Agendamentos de Retirada" description="Erro ao carregar dados" actions={<></>} />
+        <div className="container mx-auto px-6 py-8 text-center">
+          <p className="text-destructive">Erro: {(error as Error).message}</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <PageHeader
         title="Agendamentos de Retirada"
         description="Gerencie os agendamentos de retirada de produtos"
         actions={
-          <Button className="bg-gradient-primary" disabled={!canCreate} title={!canCreate ? "Sem permissão" : "Novo Agendamento"}>
-            <Plus className="mr-2 h-4 w-4" />
-            Novo Agendamento
-          </Button>
+          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+            <DialogTrigger asChild>
+              <Button className="bg-gradient-primary" disabled={!canCreate} title={!canCreate ? "Sem permissão" : "Novo Agendamento"}>
+                <Plus className="mr-2 h-4 w-4" />
+                Novo Agendamento
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>Novo Agendamento</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 py-2">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="produto">Produto *</Label>
+                    <Select value={novoAgendamento.produto} onValueChange={(v) => setNovoAgendamento((s) => ({ ...s, produto: v }))}>
+                      <SelectTrigger id="produto">
+                        <SelectValue placeholder="Selecione o produto" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {produtos?.map((p) => (
+                          <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="armazem">Armazém *</Label>
+                    <Select value={novoAgendamento.armazem} onValueChange={(v) => setNovoAgendamento((s) => ({ ...s, armazem: v }))}>
+                      <SelectTrigger id="armazem">
+                        <SelectValue placeholder="Selecione o armazém" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {armazens?.map((a) => (
+                          <SelectItem key={a.id} value={a.id}>{a.cidade} - {a.estado}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="cliente">Nome do Cliente *</Label>
+                  <Input 
+                    id="cliente" 
+                    value={novoAgendamento.cliente} 
+                    onChange={(e) => setNovoAgendamento((s) => ({ ...s, cliente: e.target.value }))} 
+                    placeholder="Ex: Cliente ABC Ltda"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="pedido">Número do Pedido *</Label>
+                    <Input 
+                      id="pedido" 
+                      value={novoAgendamento.pedido} 
+                      onChange={(e) => setNovoAgendamento((s) => ({ ...s, pedido: e.target.value }))} 
+                      placeholder="Ex: PED-2024-001"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="quantidade">Quantidade (t) *</Label>
+                    <Input 
+                      id="quantidade" 
+                      type="number" 
+                      step="0.01" 
+                      min="0"
+                      value={novoAgendamento.quantidade} 
+                      onChange={(e) => setNovoAgendamento((s) => ({ ...s, quantidade: e.target.value }))} 
+                      placeholder="0.00"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="data">Data *</Label>
+                    <Input 
+                      id="data" 
+                      type="date"
+                      value={novoAgendamento.data} 
+                      onChange={(e) => setNovoAgendamento((s) => ({ ...s, data: e.target.value }))} 
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="horario">Horário *</Label>
+                    <Input 
+                      id="horario" 
+                      type="time"
+                      value={novoAgendamento.horario} 
+                      onChange={(e) => setNovoAgendamento((s) => ({ ...s, horario: e.target.value }))} 
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="placa">Placa do Veículo *</Label>
+                  <Input 
+                    id="placa" 
+                    value={novoAgendamento.placa} 
+                    onChange={(e) => setNovoAgendamento((s) => ({ ...s, placa: e.target.value.toUpperCase() }))} 
+                    placeholder="Ex: ABC-1234"
+                    maxLength={8}
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="motorista">Nome do Motorista *</Label>
+                    <Input 
+                      id="motorista" 
+                      value={novoAgendamento.motorista} 
+                      onChange={(e) => setNovoAgendamento((s) => ({ ...s, motorista: e.target.value }))} 
+                      placeholder="Ex: João Silva"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="documento">Documento (CPF) *</Label>
+                    <Input 
+                      id="documento" 
+                      value={novoAgendamento.documento} 
+                      onChange={(e) => setNovoAgendamento((s) => ({ ...s, documento: e.target.value }))} 
+                      placeholder="Ex: 123.456.789-00"
+                    />
+                  </div>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
+                <Button className="bg-gradient-primary" onClick={handleCreateAgendamento}>Criar Agendamento</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         }
       />
 
@@ -147,7 +513,7 @@ const Agendamentos = () => {
                       </div>
                       <div>
                         <h3 className="font-semibold text-foreground">{ag.cliente}</h3>
-                        <p className="text-sm text-muted-foreground">{ag.produto} - {ag.quantidade}t</p>
+                        <p className="text-sm text-muted-foreground">{ag.produto} - {ag.quantidade}t • {ag.armazem}</p>
                         <p className="text-xs text-muted-foreground">Pedido: <span className="font-medium text-foreground">{ag.pedido}</span></p>
                         <p className="text-xs text-muted-foreground">Data: {ag.data} • {ag.horario}</p>
                       </div>
