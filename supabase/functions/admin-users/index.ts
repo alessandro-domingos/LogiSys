@@ -153,7 +153,8 @@ Deno.serve(async (req) => {
       headers: { "content-type": "application/json", ...corsHeaders },
     });
   } catch (e) {
-    return new Response(JSON.stringify({ error: "Unexpected error", details: String(e) }), {
+    console.error("Unexpected error:", e);
+    return new Response(JSON.stringify({ error: "Unexpected error occurred while creating user" }), {
       status: 500,
       headers: { "content-type": "application/json", ...corsHeaders },
     });

@@ -180,8 +180,9 @@ Deno.serve(async (req) => {
       },
     );
   } catch (e) {
+    console.error("Unexpected error:", e);
     return new Response(
-      JSON.stringify({ error: "Unexpected error", details: String(e) }),
+      JSON.stringify({ error: "Unexpected error occurred while creating customer" }),
       {
         status: 500,
         headers: { "content-type": "application/json", ...corsHeaders },
