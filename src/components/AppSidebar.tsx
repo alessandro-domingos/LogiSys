@@ -79,22 +79,25 @@ const menuItems = [
 export function AppSidebar() {
   const { state } = useSidebar();
   const { signOut } = useAuth();
-  const { canAccess } = usePermissions();
+  const { canAccess, loading: permissionsLoading } = usePermissions();
   const isCollapsed = state === "collapsed";
 
   const handleLogout = async () => {
     await signOut();
   };
 
-  const visibleMenuItems = menuItems.filter(item => {
-    if (!item.resource) {
-      console.log(`✅ [DEBUG] Menu item "${item.title}" - no resource required, showing`);
-      return true;
-    }
-    const hasAccess = canAccess(item.resource, 'read');
-    console.log(`✅ [DEBUG] Menu item "${item.title}" - resource: ${item.resource}, access: ${hasAccess}`);
-    return hasAccess;
-  });
+  // Wait for permissions to load before filtering menu
+  const visibleMenuItems = permissionsLoading 
+    ? [menuItems[0]] // Show only Dashboard while loading
+    : menuItems.filter(item => {
+        if (!item.resource) {
+          console.log(`✅ [DEBUG] Menu item "${item.title}" - no resource required, showing`);
+          return true;
+        }
+        const hasAccess = canAccess(item.resource, 'read');
+        console.log(`${hasAccess ? '✅' : '❌'} [DEBUG] Menu item "${item.title}" - resource: ${item.resource}, access: ${hasAccess}`);
+        return hasAccess;
+      });
 
   console.log('✅ [DEBUG] Final visible menu items:', visibleMenuItems.map(i => i.title));
 

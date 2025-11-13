@@ -151,14 +151,21 @@ const Dashboard = () => {
   const { data: agendamentosHoje } = useQuery({
     queryKey: ["agendamentos-hoje-count"],
     queryFn: async () => {
-      const { count, error } = await supabase
-        .from("agendamentos")
-        .select("id", { count: "exact", head: true })
-        .eq("status", "confirmado")
-        .gte("data_hora", startOfTodayISO())
-        .lte("data_hora", endOfTodayISO());
-      if (error) throw error;
-      return count ?? 0;
+      try {
+        const { count, error } = await supabase
+          .from("agendamentos")
+          .select("id", { count: "exact", head: true })
+          .gte("data_hora", startOfTodayISO())
+          .lte("data_hora", endOfTodayISO());
+        if (error) {
+          console.error("Error fetching agendamentos hoje:", error);
+          return 0;
+        }
+        return count ?? 0;
+      } catch (err) {
+        console.error("Exception fetching agendamentos hoje:", err);
+        return 0;
+      }
     },
     refetchInterval: 60_000,
   });
@@ -166,12 +173,19 @@ const Dashboard = () => {
   const { data: carregandoCount } = useQuery({
     queryKey: ["carregamentos-em-andamento-count"],
     queryFn: async () => {
-      const { count, error } = await supabase
-        .from("carregamentos")
-        .select("id", { count: "exact", head: true })
-        .eq("status", "em_andamento");
-      if (error) throw error;
-      return count ?? 0;
+      try {
+        const { count, error } = await supabase
+          .from("carregamentos")
+          .select("id", { count: "exact", head: true });
+        if (error) {
+          console.error("Error fetching carregamentos:", error);
+          return 0;
+        }
+        return count ?? 0;
+      } catch (err) {
+        console.error("Exception fetching carregamentos:", err);
+        return 0;
+      }
     },
     refetchInterval: 60_000,
   });
@@ -179,12 +193,20 @@ const Dashboard = () => {
   const { data: baixoEstoqueCount } = useQuery({
     queryKey: ["stock-baixo-count"],
     queryFn: async () => {
-      const { count, error } = await supabase
-        .from("stock_balances")
-        .select("id", { count: "exact", head: true })
-        .lt("quantidade_atual", 10);
-      if (error) throw error;
-      return count ?? 0;
+      try {
+        const { count, error } = await supabase
+          .from("estoque")
+          .select("id", { count: "exact", head: true })
+          .lt("quantidade", 10);
+        if (error) {
+          console.error("Error fetching stock baixo count:", error);
+          return 0;
+        }
+        return count ?? 0;
+      } catch (err) {
+        console.error("Exception fetching stock baixo count:", err);
+        return 0;
+      }
     },
     refetchInterval: 120_000,
   });
@@ -264,28 +286,43 @@ const Dashboard = () => {
   const { data: lowStocks } = useQuery({
     queryKey: ["stock-baixo-list"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("stock_balances")
-        .select("id,product_id,warehouse_id,quantidade_atual,updated_at")
-        .lt("quantidade_atual", 10)
-        .limit(20);
-      if (error) throw error;
-      return data ?? [];
+      try {
+        const { data, error } = await supabase
+          .from("estoque")
+          .select("id,quantidade,produto_id,armazem_id,updated_at,produtos(nome),armazens(nome)")
+          .lt("quantidade", 10)
+          .limit(20);
+        if (error) {
+          console.error("Error fetching stock baixo list:", error);
+          return [];
+        }
+        return data ?? [];
+      } catch (err) {
+        console.error("Exception fetching stock baixo list:", err);
+        return [];
+      }
     },
     refetchInterval: 180_000,
   });
   const { data: atrasos } = useQuery({
     queryKey: ["liberacoes-atrasadas"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("liberacoes")
-        .select("id,cliente,pedido,quantidade,quantidade_retirada,created_at,status")
-        .eq("status", "pendente")
-        .lt("created_at", startOfTodayISO())
-        .order("created_at", { ascending: true })
-        .limit(20);
-      if (error) throw error;
-      return data ?? [];
+      try {
+        const { data, error } = await supabase
+          .from("liberacoes")
+          .select("id,cliente,pedido,quantidade,quantidade_retirada,created_at")
+          .lt("created_at", startOfTodayISO())
+          .order("created_at", { ascending: true })
+          .limit(20);
+        if (error) {
+          console.error("Error fetching liberacoes atrasadas:", error);
+          return [];
+        }
+        return data ?? [];
+      } catch (err) {
+        console.error("Exception fetching liberacoes atrasadas:", err);
+        return [];
+      }
     },
     refetchInterval: 180_000,
   });
@@ -377,8 +414,10 @@ const Dashboard = () => {
                   )}
                   {(lowStocks ?? []).map((s: any) => (
                     <div key={s.id} className="text-xs flex items-center justify-between rounded border p-2">
-                      <div>Produto #{s.product_id} • Armazém #{s.warehouse_id}</div>
-                      <Badge variant="destructive">{Number(s.quantidade_atual ?? 0)}</Badge>
+                      <div>
+                        {s.produtos?.nome || `Produto #${s.produto_id}`} • {s.armazens?.nome || `Armazém #${s.armazem_id}`}
+                      </div>
+                      <Badge variant="destructive">{Number(s.quantidade ?? 0)}</Badge>
                     </div>
                   ))}
                 </div>
@@ -396,7 +435,7 @@ const Dashboard = () => {
                         {l.cliente || "Cliente"} • Pedido {l.pedido || "-"}
                         <div className="text-[10px] text-muted-foreground">Desde {toBRDate(l.created_at)}</div>
                       </div>
-                      <Badge variant="outline">Pendente</Badge>
+                      <Badge variant="outline">Atrasado</Badge>
                     </div>
                   ))}
                 </div>

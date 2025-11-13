@@ -24,27 +24,47 @@ export interface Permission {
 }
 
 export const usePermissions = () => {
-  const { userRole, user } = useAuth();
+  const { userRole, user, loading: authLoading } = useAuth();
   const [permissions, setPermissions] = useState<Record<Resource, Permission>>({} as any);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchPermissions = async () => {
+      // Wait for auth to finish loading
+      if (authLoading) {
+        console.log('🔍 [DEBUG] usePermissions - Waiting for auth to load...');
+        return;
+      }
+
       if (!userRole || !user) {
-        console.log('🔍 [DEBUG] usePermissions - No user or role, clearing permissions');
+        console.log('🔍 [DEBUG] usePermissions - No user or role after auth loaded, clearing permissions');
         setPermissions({} as any);
         setLoading(false);
         return;
       }
 
-      console.log('🔍 [DEBUG] usePermissions - Fetching permissions for role:', userRole);
+      console.log('🔍 [DEBUG] usePermissions - Fetching permissions for role:', userRole, 'user:', user.id);
 
-      const { data, error } = await supabase
-        .from('role_permissions')
-        .select('*')
-        .eq('role', userRole as UserRole);
+      try {
+        const { data, error } = await supabase
+          .from('role_permissions')
+          .select('*')
+          .eq('role', userRole as UserRole);
 
-      if (!error && data) {
+        if (error) {
+          console.error('❌ [ERROR] usePermissions - Query error:', error);
+          setPermissions({} as any);
+          setLoading(false);
+          return;
+        }
+
+        if (!data || data.length === 0) {
+          console.warn('⚠️ [WARN] usePermissions - No permissions found for role:', userRole);
+          setPermissions({} as any);
+          setLoading(false);
+          return;
+        }
+
         const permsMap: Record<string, Permission> = {};
         
         data.forEach(perm => {
@@ -56,17 +76,18 @@ export const usePermissions = () => {
           };
         });
 
+        console.log('✅ [SUCCESS] usePermissions - Loaded permissions:', permsMap);
         setPermissions(permsMap as any);
-        console.log('✅ [DEBUG] usePermissions - Loaded permissions:', permsMap);
-      } else if (error) {
-        console.error('❌ [DEBUG] usePermissions - Error fetching permissions:', error);
+      } catch (err) {
+        console.error('❌ [ERROR] usePermissions - Exception:', err);
+        setPermissions({} as any);
+      } finally {
+        setLoading(false);
       }
-      
-      setLoading(false);
     };
 
     fetchPermissions();
-  }, [userRole, user]);
+  }, [userRole, user?.id, authLoading]);
 
   const canAccess = (resource: Resource, action: 'create' | 'read' | 'update' | 'delete' = 'read'): boolean => {
     const perm = permissions[resource];
