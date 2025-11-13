@@ -8,12 +8,12 @@ type UserRole = Database['public']['Enums']['user_role'];
 export type Resource = 
   | 'users' 
   | 'roles' 
-  | 'estoque' 
-  | 'produtos' 
-  | 'armazens' 
+  | 'stock' 
+  | 'products' 
+  | 'warehouses' 
   | 'liberacoes' 
   | 'agendamentos' 
-  | 'carregamentos'
+  | 'loading_photos'
   | 'clientes';
 
 export interface Permission {

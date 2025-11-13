@@ -71,12 +71,30 @@ const parseDate = (d: string) => {
 const Agendamentos = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { hasRole } = useAuth();
+  const { hasRole, userRole, user } = useAuth();
   const canCreate = hasRole("admin") || hasRole("logistica") || hasRole("cliente");
+
+  // Get current user's cliente_id if they are a customer
+  const { data: currentCliente } = useQuery({
+    queryKey: ["current-cliente", user?.id],
+    queryFn: async () => {
+      if (!user || userRole !== "cliente") return null;
+      
+      const { data, error } = await supabase
+        .from("clientes")
+        .select("id")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!user && userRole === "cliente",
+  });
 
   // Fetch agendamentos from Supabase
   const { data: agendamentosData, isLoading, error } = useQuery({
-    queryKey: ["agendamentos"],
+    queryKey: ["agendamentos", currentCliente?.id],
     queryFn: async () => {
       console.log("🔍 [DEBUG] Buscando agendamentos...");
       const { data, error } = await supabase
@@ -95,9 +113,10 @@ const Agendamentos = () => {
           created_at,
           liberacao:liberacoes(
             id,
-            cliente_nome,
             pedido_interno,
             quantidade_liberada,
+            cliente_id,
+            clientes(nome, cnpj_cpf),
             produto:produtos(id, nome),
             armazem:armazens(id, nome, cidade, estado)
           )
@@ -108,17 +127,27 @@ const Agendamentos = () => {
         console.error("❌ [ERROR] Erro ao buscar agendamentos:", error);
         throw error;
       }
-      console.log("✅ [DEBUG] Agendamentos carregados:", data?.length);
-      return data;
+
+      // Filter by customer on client-side if role is cliente
+      let filteredData = data || [];
+      if (userRole === "cliente" && currentCliente?.id) {
+        filteredData = filteredData.filter((ag: any) => 
+          ag.liberacao?.cliente_id === currentCliente.id
+        );
+      }
+
+      console.log("✅ [DEBUG] Agendamentos carregados:", filteredData?.length);
+      return filteredData;
     },
     refetchInterval: 30000, // Atualiza a cada 30s
+    enabled: userRole !== "cliente" || !!currentCliente?.id,
   });
 
   const agendamentos = useMemo(() => {
     if (!agendamentosData) return [];
-    return agendamentosData.map((item: SupabaseAgendamentoItem) => ({
+    return agendamentosData.map((item: any) => ({
       id: item.id,
-      cliente: item.liberacao?.cliente_nome || "N/A",
+      cliente: item.liberacao?.clientes?.nome || "N/A",
       produto: item.liberacao?.produto?.nome || "N/A",
       quantidade: item.quantidade,
       data: new Date(item.data_retirada).toLocaleDateString("pt-BR"),
@@ -151,27 +180,37 @@ const Agendamentos = () => {
 
   // Buscar liberações pendentes para o formulário
   const { data: liberacoesPendentes } = useQuery({
-    queryKey: ["liberacoes-pendentes"],
+    queryKey: ["liberacoes-pendentes", currentCliente?.id],
     queryFn: async () => {
       console.log("🔍 [DEBUG] Buscando liberações pendentes...");
-      const { data, error } = await supabase
+      
+      let query = supabase
         .from("liberacoes")
         .select(`
           id,
-          cliente_nome,
           pedido_interno,
           quantidade_liberada,
           quantidade_retirada,
+          cliente_id,
+          clientes(nome),
           produto:produtos(nome),
           armazem:armazens(cidade, estado)
         `)
         .in("status", ["pendente", "parcial"])
         .order("created_at", { ascending: false });
+
+      // Filter by customer if role is cliente
+      if (userRole === "cliente" && currentCliente?.id) {
+        query = query.eq("cliente_id", currentCliente.id);
+      }
+      
+      const { data, error } = await query;
       
       if (error) throw error;
       console.log("✅ [DEBUG] Liberações pendentes:", data?.length);
       return data || [];
     },
+    enabled: userRole !== "cliente" || !!currentCliente?.id,
   });
 
   const resetFormNovoAgendamento = () => {
@@ -226,8 +265,8 @@ const Agendamentos = () => {
           id,
           data_retirada,
           liberacao:liberacoes(
-            cliente_nome,
             pedido_interno,
+            clientes(nome),
             produto:produtos(nome)
           )
         `)
@@ -242,7 +281,7 @@ const Agendamentos = () => {
 
       toast({ 
         title: "Agendamento criado com sucesso!", 
-        description: `${agendData.liberacao?.cliente_nome} - ${new Date(agendData.data_retirada).toLocaleDateString("pt-BR")} - ${qtdNum}t` 
+        description: `${(agendData.liberacao as any)?.clientes?.nome} - ${new Date(agendData.data_retirada).toLocaleDateString("pt-BR")} - ${qtdNum}t` 
       });
 
       resetFormNovoAgendamento();
@@ -356,11 +395,11 @@ const Agendamentos = () => {
                       <SelectValue placeholder="Selecione a liberação" />
                     </SelectTrigger>
                     <SelectContent>
-                      {liberacoesPendentes?.map((lib) => {
+                      {liberacoesPendentes?.map((lib: any) => {
                         const disponivel = lib.quantidade_liberada - lib.quantidade_retirada;
                         return (
                           <SelectItem key={lib.id} value={lib.id}>
-                            {lib.pedido_interno} - {lib.cliente_nome} - {lib.produto?.nome} ({disponivel}t disponível) - {lib.armazem?.cidade}/{lib.armazem?.estado}
+                            {lib.pedido_interno} - {lib.clientes?.nome} - {lib.produto?.nome} ({disponivel}t disponível) - {lib.armazem?.cidade}/{lib.armazem?.estado}
                           </SelectItem>
                         );
                       })}

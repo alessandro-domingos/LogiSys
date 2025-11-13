@@ -36,7 +36,7 @@ const menuItems = [
     title: "Estoque",
     url: "/estoque",
     icon: Package,
-    resource: "estoque" as const,
+    resource: "stock" as const,
   },
   {
     title: "Liberações",
@@ -54,13 +54,13 @@ const menuItems = [
     title: "Armazéns",
     url: "/armazens",
     icon: Warehouse,
-    resource: "armazens" as const,
+    resource: "warehouses" as const,
   },
   {
     title: "Carregamento",
     url: "/carregamento",
     icon: Truck,
-    resource: "carregamentos" as const,
+    resource: "loading_photos" as const,
   },
   {
     title: "Clientes",

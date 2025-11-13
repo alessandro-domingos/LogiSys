@@ -48,13 +48,14 @@ const Liberacoes = () => {
         .from("liberacoes")
         .select(`
           id,
-          cliente_nome,
           pedido_interno,
           quantidade_liberada,
           quantidade_retirada,
           status,
           data_liberacao,
           created_at,
+          cliente_id,
+          clientes(nome, cnpj_cpf),
           produto:produtos(id, nome),
           armazem:armazens(id, nome, cidade, estado)
         `)
@@ -72,10 +73,10 @@ const Liberacoes = () => {
 
   const liberacoes = useMemo(() => {
     if (!liberacoesData) return [];
-    return liberacoesData.map((item) => ({
+    return liberacoesData.map((item: any) => ({
       id: item.id,
       produto: item.produto?.nome || "N/A",
-      cliente: item.cliente_nome,
+      cliente: item.clientes?.nome || "N/A",
       quantidade: item.quantidade_liberada,
       quantidadeRetirada: item.quantidade_retirada,
       pedido: item.pedido_interno,
@@ -92,12 +93,12 @@ const Liberacoes = () => {
   const [novaLiberacao, setNovaLiberacao] = useState({
     produto: "",
     armazem: "",
-    cliente: "",
+    cliente_id: "",
     pedido: "",
     quantidade: "",
   });
 
-  // Buscar produtos e armazéns para selects
+  // Buscar produtos, armazéns e clientes para selects
   const { data: produtos } = useQuery({
     queryKey: ["produtos-list"],
     queryFn: async () => {
@@ -118,6 +119,19 @@ const Liberacoes = () => {
         .select("id, nome, cidade, estado")
         .eq("ativo", true)
         .order("cidade");
+      return data || [];
+    },
+  });
+
+  const { data: clientesData } = useQuery({
+    queryKey: ["clientes-ativos"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("clientes")
+        .select("id, nome, cnpj_cpf")
+        .eq("ativo", true)
+        .order("nome");
+      if (error) throw error;
       return data || [];
     },
   });
@@ -164,13 +178,13 @@ const Liberacoes = () => {
   const activeAdvancedCount = (selectedStatuses.length ? 1 : 0) + (selectedArmazens.length ? 1 : 0) + ((dateFrom || dateTo) ? 1 : 0);
 
   const resetFormNovaLiberacao = () => {
-    setNovaLiberacao({ produto: "", armazem: "", cliente: "", pedido: "", quantidade: "" });
+    setNovaLiberacao({ produto: "", armazem: "", cliente_id: "", pedido: "", quantidade: "" });
   };
 
   const handleCreateLiberacao = async () => {
-    const { produto, armazem, cliente, pedido, quantidade } = novaLiberacao;
+    const { produto, armazem, cliente_id, pedido, quantidade } = novaLiberacao;
 
-    if (!produto || !armazem || !cliente.trim() || !pedido.trim() || !quantidade) {
+    if (!produto || !armazem || !cliente_id || !pedido.trim() || !quantidade) {
       toast({ variant: "destructive", title: "Preencha todos os campos obrigatórios" });
       return;
     }
@@ -182,7 +196,7 @@ const Liberacoes = () => {
     }
 
     try {
-      console.log("🔍 [DEBUG] Criando liberação:", { produto, armazem, cliente, pedido, quantidade: qtdNum });
+      console.log("🔍 [DEBUG] Criando liberação:", { produto, armazem, cliente_id, pedido, quantidade: qtdNum });
 
       const { data: userData } = await supabase.auth.getUser();
       
@@ -191,7 +205,7 @@ const Liberacoes = () => {
         .insert({
           produto_id: produto,
           armazem_id: armazem,
-          cliente_nome: cliente.trim(),
+          cliente_id: cliente_id,
           pedido_interno: pedido.trim(),
           quantidade_liberada: qtdNum,
           quantidade_retirada: 0,
@@ -201,8 +215,9 @@ const Liberacoes = () => {
         })
         .select(`
           id,
-          cliente_nome,
           pedido_interno,
+          cliente_id,
+          clientes(nome),
           produto:produtos(nome),
           armazem:armazens(cidade)
         `)
@@ -217,7 +232,7 @@ const Liberacoes = () => {
 
       toast({ 
         title: "Liberação criada com sucesso!", 
-        description: `Pedido ${pedido} para ${cliente} - ${qtdNum}t de ${data.produto?.nome}` 
+        description: `Pedido ${pedido} para ${data.clientes?.nome} - ${qtdNum}t de ${data.produto?.nome}` 
       });
 
       resetFormNovaLiberacao();
@@ -305,13 +320,19 @@ const Liberacoes = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="cliente">Nome do Cliente *</Label>
-                  <Input 
-                    id="cliente" 
-                    value={novaLiberacao.cliente} 
-                    onChange={(e) => setNovaLiberacao((s) => ({ ...s, cliente: e.target.value }))} 
-                    placeholder="Ex: Cliente ABC Ltda"
-                  />
+                  <Label htmlFor="cliente">Cliente *</Label>
+                  <Select value={novaLiberacao.cliente_id} onValueChange={(v) => setNovaLiberacao((s) => ({ ...s, cliente_id: v }))}>
+                    <SelectTrigger id="cliente">
+                      <SelectValue placeholder="Selecione o cliente" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {clientesData?.map((cliente) => (
+                        <SelectItem key={cliente.id} value={cliente.id}>
+                          {cliente.nome} - {cliente.cnpj_cpf}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <div className="space-y-2">
