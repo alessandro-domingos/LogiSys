@@ -24,17 +24,20 @@ export interface Permission {
 }
 
 export const usePermissions = () => {
-  const { userRole } = useAuth();
+  const { userRole, user } = useAuth();
   const [permissions, setPermissions] = useState<Record<Resource, Permission>>({} as any);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchPermissions = async () => {
-      if (!userRole) {
+      if (!userRole || !user) {
+        console.log('🔍 [DEBUG] usePermissions - No user or role, clearing permissions');
         setPermissions({} as any);
         setLoading(false);
         return;
       }
+
+      console.log('🔍 [DEBUG] usePermissions - Fetching permissions for role:', userRole);
 
       const { data, error } = await supabase
         .from('role_permissions')
@@ -54,30 +57,44 @@ export const usePermissions = () => {
         });
 
         setPermissions(permsMap as any);
+        console.log('✅ [DEBUG] usePermissions - Loaded permissions:', permsMap);
+      } else if (error) {
+        console.error('❌ [DEBUG] usePermissions - Error fetching permissions:', error);
       }
       
       setLoading(false);
     };
 
     fetchPermissions();
-  }, [userRole]);
+  }, [userRole, user]);
 
   const canAccess = (resource: Resource, action: 'create' | 'read' | 'update' | 'delete' = 'read'): boolean => {
     const perm = permissions[resource];
-    if (!perm) return false;
+    if (!perm) {
+      console.log(`🔍 [DEBUG] canAccess - No permission found for resource: ${resource}`);
+      return false;
+    }
 
+    let hasAccess = false;
     switch (action) {
       case 'create':
-        return perm.can_create;
+        hasAccess = perm.can_create;
+        break;
       case 'read':
-        return perm.can_read;
+        hasAccess = perm.can_read;
+        break;
       case 'update':
-        return perm.can_update;
+        hasAccess = perm.can_update;
+        break;
       case 'delete':
-        return perm.can_delete;
+        hasAccess = perm.can_delete;
+        break;
       default:
-        return false;
+        hasAccess = false;
     }
+    
+    console.log(`🔍 [DEBUG] canAccess - Resource: ${resource}, Action: ${action}, Access: ${hasAccess}`);
+    return hasAccess;
   };
 
   return { permissions, canAccess, loading };

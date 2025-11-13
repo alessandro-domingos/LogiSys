@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { usePermissions } from "./hooks/usePermissions";
 import { Layout } from "./components/Layout";
@@ -15,6 +15,7 @@ import Admin from "./pages/Admin";
 import Armazens from "./pages/Armazens";
 import Clientes from "./pages/Clientes";
 import AuthPage from "./pages/AuthPage";
+import ChangePassword from "./pages/ChangePassword";
 import NotFound from "./pages/NotFound";
 import type { Resource } from "./hooks/usePermissions";
 
@@ -27,8 +28,9 @@ const ProtectedRoute = ({
   children: React.ReactNode;
   resource?: Resource;
 }) => {
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, needsPasswordChange } = useAuth();
   const { canAccess, loading: permLoading } = usePermissions();
+  const location = useLocation();
   
   if (authLoading || permLoading) {
     return (
@@ -43,6 +45,12 @@ const ProtectedRoute = ({
   
   if (!user) {
     return <Navigate to="/auth" replace />;
+  }
+
+  // Redirect to change password if needed, but allow access to the change-password page itself
+  if (needsPasswordChange && location.pathname !== '/change-password') {
+    console.log('🔍 [DEBUG] Redirecting to change password');
+    return <Navigate to="/change-password" replace />;
   }
 
   if (resource && !canAccess(resource, 'read')) {
@@ -61,6 +69,14 @@ const App = () => (
         <BrowserRouter>
           <Routes>
             <Route path="/auth" element={<AuthPage />} />
+            <Route
+              path="/change-password"
+              element={
+                <ProtectedRoute>
+                  <ChangePassword />
+                </ProtectedRoute>
+              }
+            />
             <Route
               path="/"
               element={
