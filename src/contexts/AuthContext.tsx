@@ -17,6 +17,7 @@ interface AuthContextType {
   signOut: () => Promise<void>;
   userRole: string | null;
   hasRole: (role: string) => boolean;
+  needsPasswordChange: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -26,6 +27,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [userRole, setUserRole] = useState<string | null>(null);
+  const [needsPasswordChange, setNeedsPasswordChange] = useState(false);
   const { toast } = useToast();
 
   const fetchUserRole = async (userId: string) => {
@@ -52,8 +54,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         
         if (session?.user) {
           fetchUserRole(session.user.id);
+          // Check if user needs to change password
+          const forceChange = session.user.user_metadata?.force_password_change === true;
+          setNeedsPasswordChange(forceChange);
+          console.log('🔍 [DEBUG] Force password change:', forceChange);
         } else {
           setUserRole(null);
+          setNeedsPasswordChange(false);
         }
       }
     );
@@ -65,6 +72,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       
       if (session?.user) {
         await fetchUserRole(session.user.id);
+        // Check if user needs to change password
+        const forceChange = session.user.user_metadata?.force_password_change === true;
+        setNeedsPasswordChange(forceChange);
+        console.log('🔍 [DEBUG] Force password change:', forceChange);
       }
       
       setLoading(false);
@@ -167,7 +178,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       signUp,
       signOut,
       userRole,
-      hasRole
+      hasRole,
+      needsPasswordChange
     }}>
       {children}
     </AuthContext.Provider>

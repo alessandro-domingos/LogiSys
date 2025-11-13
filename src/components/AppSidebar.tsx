@@ -87,9 +87,16 @@ export function AppSidebar() {
   };
 
   const visibleMenuItems = menuItems.filter(item => {
-    if (!item.resource) return true;
-    return canAccess(item.resource, 'read');
+    if (!item.resource) {
+      console.log(`✅ [DEBUG] Menu item "${item.title}" - no resource required, showing`);
+      return true;
+    }
+    const hasAccess = canAccess(item.resource, 'read');
+    console.log(`✅ [DEBUG] Menu item "${item.title}" - resource: ${item.resource}, access: ${hasAccess}`);
+    return hasAccess;
   });
+
+  console.log('✅ [DEBUG] Final visible menu items:', visibleMenuItems.map(i => i.title));
 
   return (
     <Sidebar collapsible="icon">
