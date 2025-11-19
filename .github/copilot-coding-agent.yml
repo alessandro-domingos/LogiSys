@@ -1,0 +1,6 @@
+version: 1
+enabled: true
+agents:
+  - default
+permissions:
+  - write
