@@ -124,18 +124,6 @@ Deno.serve(async (req) => {
 
     const newUserId = created.user.id;
 
-    // Ensure profile exists BEFORE assigning role to satisfy FK constraints
-    const { error: profileErr } = await serviceClient
-      .from("profiles")
-      .upsert({ id: newUserId, nome, email }, { onConflict: "id" });
-
-    if (profileErr) {
-      return new Response(JSON.stringify({ error: "Failed to create profile", details: profileErr.message }), {
-        status: 500,
-        headers: { "content-type": "application/json", ...corsHeaders },
-      });
-    }
-
     // Assign role (default "cliente" unless specified). Use upsert to avoid duplicates
     const { error: roleErr } = await serviceClient
       .from("user_roles")

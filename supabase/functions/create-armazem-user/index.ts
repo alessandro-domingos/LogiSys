@@ -1,16 +1,13 @@
-// Edge Function to create customer users with service role
+// Edge Function to create armazem (warehouse) users with service role
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 import { z } from "https://deno.land/x/zod@v3.23.8/mod.ts";
 
 const BodySchema = z.object({
   nome: z.string().trim().min(2).max(100),
-  cnpj_cpf: z.string().trim().min(11).max(18),
   email: z.string().trim().email().max(255),
-  telefone: z.string().trim().optional().nullable(),
-  endereco: z.string().trim().optional().nullable(),
-  cidade: z.string().trim().optional().nullable(),
-  estado: z.string().length(2).optional().nullable(),
-  cep: z.string().trim().optional().nullable(),
+  cidade: z.string().trim().min(2),
+  estado: z.string().length(2),
+  armazem_id: z.string().uuid().optional(), // If linking to existing armazem
 });
 
 const corsHeaders = {
@@ -53,7 +50,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    const { nome, cnpj_cpf, email, telefone, endereco, cidade, estado, cep } = parsed.data;
+    const { nome, email, cidade, estado, armazem_id } = parsed.data;
 
     // Check if requester is admin or logistica
     const userClient = createClient(supabaseUrl, supabaseAnonKey, {
@@ -70,7 +67,7 @@ Deno.serve(async (req) => {
     }
 
     // Check if user has admin or logistica role
-    const { data: hasPermission, error: roleCheckError } = await userClient.rpc("has_role", {
+    const { data: hasPermission } = await userClient.rpc("has_role", {
       _user_id: requester.id,
       _role: "admin",
     });
@@ -80,8 +77,8 @@ Deno.serve(async (req) => {
       _role: "logistica",
     });
 
-    if (roleCheckError || (!hasPermission && !hasLogisticaRole)) {
-      return new Response(JSON.stringify({ error: "Forbidden: Only admin or logistica can create customers" }), {
+    if (!hasPermission && !hasLogisticaRole) {
+      return new Response(JSON.stringify({ error: "Forbidden: Only admin or logistica can create armazem users" }), {
         status: 403,
         headers: { "content-type": "application/json", ...corsHeaders },
       });
@@ -90,7 +87,7 @@ Deno.serve(async (req) => {
     // Generate random password
     const gerarSenha = (): string => {
       const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-      let senha = "Cliente";
+      let senha = "Armazem";
       for (let i = 0; i < 4; i++) {
         senha += chars.charAt(Math.floor(Math.random() * chars.length));
       }
@@ -109,7 +106,6 @@ Deno.serve(async (req) => {
       email_confirm: true,
       user_metadata: {
         nome,
-        cnpj_cpf,
         force_password_change: true,
       },
     });
@@ -123,45 +119,60 @@ Deno.serve(async (req) => {
 
     const userId = authUser.user.id;
 
-    // 2. Assign role "cliente"
+    // 2. Assign role "armazem"
     const { error: roleError } = await serviceClient
       .from("user_roles")
-      .upsert({ user_id: userId, role: "cliente" }, { onConflict: "user_id,role" });
+      .upsert({ user_id: userId, role: "armazem" }, { onConflict: "user_id,role" });
 
     if (roleError) {
       console.error("Role assignment error:", roleError);
-      // Continue anyway
     }
 
-    // 3. Create cliente record
-    const { data: cliente, error: clienteError } = await serviceClient
-      .from("clientes")
-      .insert({
-        nome,
-        cnpj_cpf,
-        email,
-        telefone: telefone || null,
-        endereco: endereco || null,
-        cidade: cidade || null,
-        estado: estado || null,
-        cep: cep || null,
-        user_id: userId,
-        ativo: true,
-      })
-      .select()
-      .single();
+    // 3. Link to armazem or create new armazem
+    let armazemData;
+    if (armazem_id) {
+      // Link to existing armazem
+      const { data, error: updateError } = await serviceClient
+        .from("armazens")
+        .update({ user_id: userId })
+        .eq("id", armazem_id)
+        .select()
+        .single();
 
-    if (clienteError) {
-      return new Response(
-        JSON.stringify({ error: "Failed to create cliente", details: clienteError.message }),
-        { status: 500, headers: { "content-type": "application/json", ...corsHeaders } },
-      );
+      if (updateError) {
+        return new Response(
+          JSON.stringify({ error: "Failed to link armazem", details: updateError.message }),
+          { status: 500, headers: { "content-type": "application/json", ...corsHeaders } },
+        );
+      }
+      armazemData = data;
+    } else {
+      // Create new armazem
+      const { data, error: createError } = await serviceClient
+        .from("armazens")
+        .insert({
+          nome,
+          cidade,
+          estado,
+          user_id: userId,
+          ativo: true,
+        })
+        .select()
+        .single();
+
+      if (createError) {
+        return new Response(
+          JSON.stringify({ error: "Failed to create armazem", details: createError.message }),
+          { status: 500, headers: { "content-type": "application/json", ...corsHeaders } },
+        );
+      }
+      armazemData = data;
     }
 
     return new Response(
       JSON.stringify({
         success: true,
-        cliente,
+        armazem: armazemData,
         senha: senhaTemporaria,
       }),
       {
@@ -172,7 +183,7 @@ Deno.serve(async (req) => {
   } catch (e) {
     console.error("Unexpected error:", e);
     return new Response(
-      JSON.stringify({ error: "Unexpected error occurred while creating customer" }),
+      JSON.stringify({ error: "Unexpected error occurred while creating armazem user" }),
       {
         status: 500,
         headers: { "content-type": "application/json", ...corsHeaders },

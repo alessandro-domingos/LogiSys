@@ -65,7 +65,7 @@ export type Database = {
             foreignKeyName: "agendamentos_created_by_fkey"
             columns: ["created_by"]
             isOneToOne: false
-            referencedRelation: "profiles"
+            referencedRelation: "users"
             referencedColumns: ["id"]
           },
           {
@@ -85,6 +85,7 @@ export type Database = {
           estado: string
           id: string
           nome: string
+          user_id: string | null
         }
         Insert: {
           ativo?: boolean | null
@@ -93,6 +94,7 @@ export type Database = {
           estado: string
           id?: string
           nome: string
+          user_id?: string | null
         }
         Update: {
           ativo?: boolean | null
@@ -101,8 +103,17 @@ export type Database = {
           estado?: string
           id?: string
           nome?: string
+          user_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "armazens_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       carregamentos: {
         Row: {
@@ -147,7 +158,7 @@ export type Database = {
             foreignKeyName: "carregamentos_updated_by_fkey"
             columns: ["updated_by"]
             isOneToOne: false
-            referencedRelation: "profiles"
+            referencedRelation: "users"
             referencedColumns: ["id"]
           },
         ]
@@ -196,7 +207,7 @@ export type Database = {
             foreignKeyName: "estoque_updated_by_fkey"
             columns: ["updated_by"]
             isOneToOne: false
-            referencedRelation: "profiles"
+            referencedRelation: "users"
             referencedColumns: ["id"]
           },
         ]
@@ -238,7 +249,7 @@ export type Database = {
             foreignKeyName: "fotos_carregamento_uploaded_by_fkey"
             columns: ["uploaded_by"]
             isOneToOne: false
-            referencedRelation: "profiles"
+            referencedRelation: "users"
             referencedColumns: ["id"]
           },
         ]
@@ -295,7 +306,7 @@ export type Database = {
             foreignKeyName: "liberacoes_created_by_fkey"
             columns: ["created_by"]
             isOneToOne: false
-            referencedRelation: "profiles"
+            referencedRelation: "users"
             referencedColumns: ["id"]
           },
           {
@@ -331,26 +342,111 @@ export type Database = {
         }
         Relationships: []
       }
-      profiles: {
+      clientes: {
         Row: {
-          created_at: string | null
-          email: string
           id: string
           nome: string
+          cnpj_cpf: string
+          email: string
+          telefone: string | null
+          endereco: string | null
+          cidade: string | null
+          estado: string | null
+          cep: string | null
+          ativo: boolean | null
+          user_id: string | null
+          created_at: string | null
+          updated_at: string | null
         }
         Insert: {
-          created_at?: string | null
-          email: string
-          id: string
+          id?: string
           nome: string
+          cnpj_cpf: string
+          email: string
+          telefone?: string | null
+          endereco?: string | null
+          cidade?: string | null
+          estado?: string | null
+          cep?: string | null
+          ativo?: boolean | null
+          user_id?: string | null
+          created_at?: string | null
+          updated_at?: string | null
         }
         Update: {
-          created_at?: string | null
-          email?: string
           id?: string
           nome?: string
+          cnpj_cpf?: string
+          email?: string
+          telefone?: string | null
+          endereco?: string | null
+          cidade?: string | null
+          estado?: string | null
+          cep?: string | null
+          ativo?: boolean | null
+          user_id?: string | null
+          created_at?: string | null
+          updated_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "clientes_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      colaboradores: {
+        Row: {
+          id: string
+          nome: string
+          cpf: string
+          email: string
+          telefone: string | null
+          cargo: string | null
+          departamento: string | null
+          ativo: boolean | null
+          user_id: string | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          nome: string
+          cpf: string
+          email: string
+          telefone?: string | null
+          cargo?: string | null
+          departamento?: string | null
+          ativo?: boolean | null
+          user_id?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          nome?: string
+          cpf?: string
+          email?: string
+          telefone?: string | null
+          cargo?: string | null
+          departamento?: string | null
+          ativo?: boolean | null
+          user_id?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "colaboradores_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       role_permissions: {
         Row: {

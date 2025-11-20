@@ -1,16 +1,15 @@
-// Edge Function to create customer users with service role
+// Edge Function to create colaborador (employee/staff) users with service role
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 import { z } from "https://deno.land/x/zod@v3.23.8/mod.ts";
 
 const BodySchema = z.object({
   nome: z.string().trim().min(2).max(100),
-  cnpj_cpf: z.string().trim().min(11).max(18),
+  cpf: z.string().trim().min(11).max(14),
   email: z.string().trim().email().max(255),
   telefone: z.string().trim().optional().nullable(),
-  endereco: z.string().trim().optional().nullable(),
-  cidade: z.string().trim().optional().nullable(),
-  estado: z.string().length(2).optional().nullable(),
-  cep: z.string().trim().optional().nullable(),
+  cargo: z.string().trim().optional().nullable(),
+  departamento: z.string().trim().optional().nullable(),
+  role: z.enum(["logistica", "comercial", "admin"]).default("comercial"),
 });
 
 const corsHeaders = {
@@ -53,7 +52,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    const { nome, cnpj_cpf, email, telefone, endereco, cidade, estado, cep } = parsed.data;
+    const { nome, cpf, email, telefone, cargo, departamento, role } = parsed.data;
 
     // Check if requester is admin or logistica
     const userClient = createClient(supabaseUrl, supabaseAnonKey, {
@@ -70,7 +69,7 @@ Deno.serve(async (req) => {
     }
 
     // Check if user has admin or logistica role
-    const { data: hasPermission, error: roleCheckError } = await userClient.rpc("has_role", {
+    const { data: hasPermission } = await userClient.rpc("has_role", {
       _user_id: requester.id,
       _role: "admin",
     });
@@ -80,8 +79,8 @@ Deno.serve(async (req) => {
       _role: "logistica",
     });
 
-    if (roleCheckError || (!hasPermission && !hasLogisticaRole)) {
-      return new Response(JSON.stringify({ error: "Forbidden: Only admin or logistica can create customers" }), {
+    if (!hasPermission && !hasLogisticaRole) {
+      return new Response(JSON.stringify({ error: "Forbidden: Only admin or logistica can create colaborador users" }), {
         status: 403,
         headers: { "content-type": "application/json", ...corsHeaders },
       });
@@ -90,8 +89,8 @@ Deno.serve(async (req) => {
     // Generate random password
     const gerarSenha = (): string => {
       const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-      let senha = "Cliente";
-      for (let i = 0; i < 4; i++) {
+      let senha = "Staff";
+      for (let i = 0; i < 5; i++) {
         senha += chars.charAt(Math.floor(Math.random() * chars.length));
       }
       return senha;
@@ -109,7 +108,7 @@ Deno.serve(async (req) => {
       email_confirm: true,
       user_metadata: {
         nome,
-        cnpj_cpf,
+        cpf,
         force_password_change: true,
       },
     });
@@ -123,37 +122,34 @@ Deno.serve(async (req) => {
 
     const userId = authUser.user.id;
 
-    // 2. Assign role "cliente"
+    // 2. Assign role (logistica, comercial, or admin)
     const { error: roleError } = await serviceClient
       .from("user_roles")
-      .upsert({ user_id: userId, role: "cliente" }, { onConflict: "user_id,role" });
+      .upsert({ user_id: userId, role }, { onConflict: "user_id,role" });
 
     if (roleError) {
       console.error("Role assignment error:", roleError);
-      // Continue anyway
     }
 
-    // 3. Create cliente record
-    const { data: cliente, error: clienteError } = await serviceClient
-      .from("clientes")
+    // 3. Create colaborador record
+    const { data: colaborador, error: colaboradorError } = await serviceClient
+      .from("colaboradores")
       .insert({
         nome,
-        cnpj_cpf,
+        cpf,
         email,
         telefone: telefone || null,
-        endereco: endereco || null,
-        cidade: cidade || null,
-        estado: estado || null,
-        cep: cep || null,
+        cargo: cargo || null,
+        departamento: departamento || null,
         user_id: userId,
         ativo: true,
       })
       .select()
       .single();
 
-    if (clienteError) {
+    if (colaboradorError) {
       return new Response(
-        JSON.stringify({ error: "Failed to create cliente", details: clienteError.message }),
+        JSON.stringify({ error: "Failed to create colaborador", details: colaboradorError.message }),
         { status: 500, headers: { "content-type": "application/json", ...corsHeaders } },
       );
     }
@@ -161,7 +157,7 @@ Deno.serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: true,
-        cliente,
+        colaborador,
         senha: senhaTemporaria,
       }),
       {
@@ -172,7 +168,7 @@ Deno.serve(async (req) => {
   } catch (e) {
     console.error("Unexpected error:", e);
     return new Response(
-      JSON.stringify({ error: "Unexpected error occurred while creating customer" }),
+      JSON.stringify({ error: "Unexpected error occurred while creating colaborador user" }),
       {
         status: 500,
         headers: { "content-type": "application/json", ...corsHeaders },
