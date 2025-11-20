@@ -14,7 +14,9 @@ export type Resource =
   | 'liberacoes' 
   | 'agendamentos' 
   | 'loading_photos'
-  | 'clientes';
+  | 'clientes'
+  | 'colaboradores'
+  | 'armazens';
 
 export interface Permission {
   can_create: boolean;

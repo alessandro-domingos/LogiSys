@@ -69,6 +69,12 @@ const menuItems = [
     resource: "clientes" as const,
   },
   {
+    title: "Colaboradores",
+    url: "/colaboradores",
+    icon: Users,
+    resource: "colaboradores" as const,
+  },
+  {
     title: "Administração",
     url: "/admin",
     icon: Settings,
