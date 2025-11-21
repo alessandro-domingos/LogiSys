@@ -117,19 +117,20 @@ Roles are stored in the `user_roles` table with a many-to-one relationship to `a
 5. Temporary password must be changed on first login
 
 #### Managing System Users (Colaboradores Page):
-1. Admin/Logística accesses the Colaboradores page
-2. The page displays all system users with their assigned roles
+1. Admin accesses the Colaboradores page (only admin role can access)
+2. The page displays only users with roles 'admin' or 'logistica'
 3. Admins can:
    - Create new users with any role (admin, logistica, armazem, comercial, cliente)
    - Update user roles via dropdown selection
    - View user details and creation dates
 4. System uses RPC functions:
-   - `get_users_with_roles` to list all users
+   - `get_users_with_roles` to list all users (filtered on frontend for admin/logistica only)
+   - Optional: `get_colaboradores` for direct backend filtering (see migration 20251121)
    - `update_user_role` to change user permissions
    - `admin-users` edge function for user creation
 5. All newly created users receive temporary passwords that must be changed on first login
 
-**Note:** This page manages system users and their access roles. For employee-specific data (CPF, cargo, departamento), a separate employee management feature would be needed.
+**Note:** The Colaboradores page filters users and displays only roles admin and logistica. Only admin can create/modify users. For employee-specific data (CPF, cargo, departamento), a separate employee management feature would be needed.
 
 #### Creating an Armazém User (Warehouse):
 1. Admin/Logística accesses the Armazéns page
@@ -193,7 +194,7 @@ The application sidebar organizes features into two main groups:
 **Management Group:**
 6. Clientes - Customer management
 7. Armazéns - Warehouse management
-8. Colaboradores - User & role management (visible only to admin and logistica roles)
+8. Colaboradores - Collaborator management (visible only to admin role, displays only admin/logistica users)
 
 The menu dynamically adjusts based on user permissions, showing only accessible features for each role.
 

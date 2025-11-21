@@ -22,9 +22,37 @@ interface User {
   role: string | null;
 }
 
+// Tipo para o retorno da função RPC get_users_with_roles
+interface RpcUserData {
+  id: string;
+  nome: string;
+  email: string;
+  created_at: string;
+  roles?: UserRole[];
+  role?: UserRole;
+}
+
+// Constante para facilitar troca futura de função RPC
+const USERS_FUNCTION = 'get_users_with_roles';
+
+// Helper para mapear e filtrar colaboradores (admin e logistica)
+const mapAndFilterColaboradores = (usersData: RpcUserData[]): User[] => {
+  const usersMapped: User[] = (usersData || []).map(u => ({
+    id: u.id,
+    nome: u.nome,
+    email: u.email,
+    created_at: u.created_at,
+    role: Array.isArray(u.roles) ? u.roles[0] ?? null : u.role ?? null
+  }));
+  
+  // Filtrar apenas colaboradores (admin ou logistica)
+  return usersMapped.filter(u => u.role === 'admin' || u.role === 'logistica');
+};
+
 const Colaboradores = () => {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [newUserEmail, setNewUserEmail] = useState("");
   const [newUserNome, setNewUserNome] = useState("");
   const [newUserPassword, setNewUserPassword] = useState("");
@@ -35,21 +63,32 @@ const Colaboradores = () => {
 
   const fetchUsers = async () => {
     setLoading(true);
-    const { data: usersData, error } = await (supabase.rpc as any)('get_users_with_roles');
-    if (error) {
-      toast({ variant: 'destructive', title: 'Erro ao carregar usuários', description: error.message });
+    setError(null);
+    try {
+      const { data: usersData, error: rpcError } = await supabase.rpc(USERS_FUNCTION) as { data: RpcUserData[] | null; error: Error | null };
+      if (rpcError) {
+        setError(rpcError.message);
+        toast({ 
+          variant: 'destructive', 
+          title: 'Erro ao carregar colaboradores', 
+          description: 'Verifique se a função get_users_with_roles foi atualizada (migration 20251120_update_get_users_function.sql)'
+        });
+        setLoading(false);
+        return;
+      }
+      const colaboradoresFiltrados = mapAndFilterColaboradores(usersData || []);
+      setUsers(colaboradoresFiltrados);
       setLoading(false);
-      return;
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Erro desconhecido';
+      setError(errorMessage);
+      toast({ 
+        variant: 'destructive', 
+        title: 'Erro ao carregar colaboradores', 
+        description: 'Não foi possível carregar colaboradores. Confirme se a função get_users_with_roles está atualizada.'
+      });
+      setLoading(false);
     }
-    const usersMapped: User[] = (usersData || []).map(u => ({
-      id: u.id,
-      nome: u.nome,
-      email: u.email,
-      created_at: u.created_at,
-      role: Array.isArray(u.roles) ? u.roles[0] ?? null : u.role ?? null
-    }));
-    setUsers(usersMapped);
-    setLoading(false);
   };
 
   useEffect(() => {
@@ -78,10 +117,11 @@ const Colaboradores = () => {
       });
 
       if (error) {
+        const errorMessage = error instanceof Error ? error.message : "Falha no servidor";
         toast({
           variant: "destructive",
           title: "Erro ao criar usuário",
-          description: (error as any)?.message || "Falha no servidor"
+          description: errorMessage
         });
         return;
       }
@@ -101,17 +141,18 @@ const Colaboradores = () => {
         await new Promise(resolve => setTimeout(resolve, 500));
         fetchUsers();
       }
-    } catch (err: any) {
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Erro desconhecido";
       toast({
         variant: "destructive",
         title: "Erro ao criar usuário",
-        description: err.message || "Erro desconhecido"
+        description: errorMessage
       });
     }
   };
 
   const handleUpdateUserRole = async (userId: string, newRole: UserRole) => {
-    const { error } = await (supabase.rpc as any)('update_user_role', { _user_id: userId, _role: newRole });
+    const { error } = await supabase.rpc('update_user_role', { _user_id: userId, _role: newRole }) as { error: Error | null };
 
     if (error) {
       toast({
@@ -161,7 +202,7 @@ const Colaboradores = () => {
     <div className="min-h-screen bg-background">
       <PageHeader
         title="Colaboradores"
-        description="Gerencie usuários e perfis do sistema"
+        description="Gerencie colaboradores do sistema (Admin e Logística)"
         actions={
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
@@ -248,7 +289,31 @@ const Colaboradores = () => {
             {loading ? (
               <div className="text-center py-8">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-                <p className="mt-2 text-muted-foreground">Carregando usuários...</p>
+                <p className="mt-2 text-muted-foreground">Carregando colaboradores...</p>
+              </div>
+            ) : error ? (
+              <div className="text-center py-8">
+                <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-6 max-w-md mx-auto">
+                  <Shield className="h-12 w-12 mx-auto mb-4 text-destructive" />
+                  <h3 className="text-lg font-semibold mb-2 text-destructive">Erro ao Carregar Colaboradores</h3>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    Não foi possível carregar a lista de colaboradores. Verifique se a função get_users_with_roles foi atualizada para não usar a tabela profiles.
+                  </p>
+                  <p className="text-xs text-muted-foreground mb-4">
+                    Execute a migration: <code className="bg-muted px-2 py-1 rounded">20251120_update_get_users_function.sql</code>
+                  </p>
+                  <Button onClick={fetchUsers} variant="outline">
+                    Tentar Novamente
+                  </Button>
+                </div>
+              </div>
+            ) : users.length === 0 ? (
+              <div className="text-center py-8">
+                <Users className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                <p className="text-muted-foreground">Nenhum colaborador encontrado.</p>
+                <p className="text-sm text-muted-foreground mt-2">
+                  Apenas usuários com role "admin" ou "logistica" são exibidos aqui.
+                </p>
               </div>
             ) : (
               <div className="space-y-4">

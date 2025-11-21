@@ -9,6 +9,7 @@ import {
   Users,
   LogOut,
   Settings,
+  BadgeCheck,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -74,7 +75,7 @@ const lowerMenuItems = [
   {
     title: "Colaboradores",
     url: "/colaboradores",
-    icon: Users,
+    icon: BadgeCheck,
     resource: "colaboradores" as const,
     requiresRole: ["admin"] as const,
   },
