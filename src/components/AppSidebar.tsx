@@ -36,7 +36,7 @@ const upperMenuItems = [
     title: "Estoque",
     url: "/estoque",
     icon: Package,
-    resource: "stock" as const,
+    resource: "estoque" as const,
   },
   {
     title: "Liberações",
@@ -54,7 +54,7 @@ const upperMenuItems = [
     title: "Carregamentos",
     url: "/carregamento",
     icon: Truck,
-    resource: "loading_photos" as const,
+    resource: "carregamentos" as const,
   },
 ];
 
@@ -69,14 +69,14 @@ const lowerMenuItems = [
     title: "Armazéns",
     url: "/armazens",
     icon: Warehouse,
-    resource: "warehouses" as const,
+    resource: "armazens" as const,
   },
   {
     title: "Colaboradores",
     url: "/colaboradores",
     icon: Users,
     resource: "colaboradores" as const,
-    requiresRole: ["admin", "logistica"] as const,
+    requiresRole: ["admin"] as const,
   },
 ];
 
@@ -164,7 +164,12 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
+        <div className="my-2 px-3">
+          <div className="h-px bg-sidebar-border"></div>
+        </div>
+
         <SidebarGroup>
+          <SidebarGroupLabel>Gerenciamento</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {visibleLowerMenuItems.map((item) => (

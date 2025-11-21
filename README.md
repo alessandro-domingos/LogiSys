@@ -161,6 +161,30 @@ role_permissions (
 
 The frontend `usePermissions` hook queries this table to dynamically show/hide menu items and control access to features.
 
+#### Current Permissions Matrix
+
+All resources are defined in Portuguese:
+
+**Resources:**
+- `estoque` - Inventory management
+- `liberacoes` - Release management
+- `agendamentos` - Scheduling
+- `carregamentos` - Loading operations
+- `clientes` - Customer management
+- `armazens` - Warehouse management
+- `colaboradores` - User/collaborator management
+
+**Role Permissions:**
+
+| Role | estoque | liberacoes | agendamentos | carregamentos | clientes | armazens | colaboradores |
+|------|---------|------------|--------------|---------------|----------|----------|---------------|
+| **admin** | CRUD | CRUD | CRUD | CRUD | CRUD | CRUD | CRUD |
+| **logistica** | CRU | CRU | CRU | CRU | CRU | CRU | - |
+| **cliente** | - | R | CR | - | - | - | - |
+| **armazem** | - | R | R | CR | - | - | - |
+
+Legend: C=Create, R=Read, U=Update, D=Delete, "-"=No access
+
 ### Menu Navigation Structure
 
 The application sidebar organizes features into two main groups:

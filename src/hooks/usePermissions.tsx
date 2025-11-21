@@ -6,17 +6,13 @@ import type { Database } from '@/integrations/supabase/types';
 type UserRole = Database['public']['Enums']['user_role'];
 
 export type Resource = 
-  | 'users' 
-  | 'roles' 
-  | 'stock' 
-  | 'products' 
-  | 'warehouses' 
+  | 'estoque' 
   | 'liberacoes' 
   | 'agendamentos' 
-  | 'loading_photos'
+  | 'carregamentos'
   | 'clientes'
-  | 'colaboradores'
-  | 'armazens';
+  | 'armazens'
+  | 'colaboradores';
 
 export interface Permission {
   can_create: boolean;
