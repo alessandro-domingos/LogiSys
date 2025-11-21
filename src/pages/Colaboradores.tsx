@@ -139,7 +139,7 @@ const Colaboradores = () => {
     return labels[role] || role;
   };
 
-  if (!hasRole('admin') && !hasRole('logistica')) {
+  if (!hasRole('admin')) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <Card className="max-w-md">

@@ -10,7 +10,7 @@ import Dashboard from "./pages/Dashboard";
 import Estoque from "./pages/Estoque";
 import Liberacoes from "./pages/Liberacoes";
 import Agendamentos from "./pages/Agendamentos";
-import Carregamento from "./pages/Carregamento";
+import Carregamentos from "./pages/Carregamentos";
 
 import Armazens from "./pages/Armazens";
 import Clientes from "./pages/Clientes";
@@ -121,11 +121,11 @@ const App = () => (
               }
             />
             <Route
-              path="/carregamento"
+              path="/carregamentos"
               element={
                 <ProtectedRoute resource="carregamentos">
                   <Layout>
-                    <Carregamento />
+                    <Carregamentos />
                   </Layout>
                 </ProtectedRoute>
               }
