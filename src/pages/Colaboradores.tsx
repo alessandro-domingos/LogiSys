@@ -223,7 +223,7 @@ const Colaboradores = () => {
     <div className="min-h-screen bg-background">
       <PageHeader
         title="Colaboradores"
-        description="Gerencie colaboradores do sistema (Admin e Logística). Roles exibidos são provenientes de user_roles."
+        description="Gerencie colaboradores do sistema (Admin e Logística). Roles exibidas são provenientes de user_roles."
         actions={
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>

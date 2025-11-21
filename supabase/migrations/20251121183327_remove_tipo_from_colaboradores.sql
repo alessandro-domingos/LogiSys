@@ -1,7 +1,8 @@
 -- Migration: Remove legacy 'tipo' column from colaboradores table
--- This migration ensures the 'tipo' column does not exist in the colaboradores table.
--- The system now uses the user_roles table exclusively for role management.
--- This is an idempotent migration - it will only drop the column if it exists.
+-- Migração: Remove a coluna legada 'tipo' da tabela colaboradores
+-- Esta migração garante que a coluna 'tipo' não exista na tabela colaboradores.
+-- O sistema agora usa a tabela user_roles exclusivamente para gerenciamento de roles.
+-- Esta é uma migração idempotente - ela só irá dropar a coluna se ela existir.
 
 DO $$
 BEGIN
@@ -22,6 +23,6 @@ BEGIN
   END IF;
 END $$;
 
--- Add a comment to the table documenting the role management approach
+-- Adicionar comentário na tabela documentando a abordagem de gerenciamento de roles
 COMMENT ON TABLE public.colaboradores IS 
-  'Colaboradores (employees/staff) table. Roles are managed exclusively through the user_roles table. Each user should have exactly one role in user_roles.';
+  'Tabela de colaboradores (funcionários/staff). Roles são gerenciadas exclusivamente pela tabela user_roles. Cada usuário deve ter exatamente uma role em user_roles.';
