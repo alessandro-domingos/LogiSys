@@ -36,7 +36,7 @@ const upperMenuItems = [
     title: "Estoque",
     url: "/estoque",
     icon: Package,
-    resource: "stock" as const,
+    resource: "estoque" as const,
   },
   {
     title: "Liberações",
@@ -52,9 +52,9 @@ const upperMenuItems = [
   },
   {
     title: "Carregamentos",
-    url: "/carregamento",
+    url: "/carregamentos",
     icon: Truck,
-    resource: "loading_photos" as const,
+    resource: "carregamentos" as const,
   },
 ];
 
@@ -69,14 +69,14 @@ const lowerMenuItems = [
     title: "Armazéns",
     url: "/armazens",
     icon: Warehouse,
-    resource: "warehouses" as const,
+    resource: "armazens" as const,
   },
   {
     title: "Colaboradores",
     url: "/colaboradores",
     icon: Users,
     resource: "colaboradores" as const,
-    requiresRole: ["admin", "logistica"] as const,
+    requiresRole: ["admin"] as const,
   },
 ];
 
@@ -92,9 +92,9 @@ export function AppSidebar() {
 
   const filterMenuItems = (items: typeof upperMenuItems | typeof lowerMenuItems) => {
     return items.filter(item => {
-      // Check role-based requirements
+      // Check role-based requirements (Colaboradores only for admin)
       if ('requiresRole' in item && item.requiresRole) {
-        const hasRequiredRole = userRole ? item.requiresRole.includes(userRole as "admin" | "logistica") : false;
+        const hasRequiredRole = userRole ? item.requiresRole.includes(userRole as "admin") : false;
         if (!hasRequiredRole) {
           console.log(`❌ [DEBUG] Menu item "${item.title}" - requires role ${item.requiresRole.join(' or ')}, user has: ${userRole}`);
           return false;
@@ -165,6 +165,7 @@ export function AppSidebar() {
         </SidebarGroup>
 
         <SidebarGroup>
+          <SidebarGroupLabel>Cadastros</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {visibleLowerMenuItems.map((item) => (

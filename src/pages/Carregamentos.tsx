@@ -28,7 +28,7 @@ const parseDate = (d: string) => {
   return new Date(Number(yyyy), Number(mm) - 1, Number(dd));
 };
 
-const Carregamento = () => {
+const Carregamentos = () => {
   const [carregamentos] = useState<CarregamentoItem[]>([
     { id: 1, cliente: "Cliente ABC", produto: "Ureia", quantidade: 4.0, placa: "ABC-1234", motorista: "João Silva", horario: "14:00", data: "18/01/2024", status: "em_andamento", fotosTotal: 2, warehouseId: 11 },
     { id: 2, cliente: "Transportadora XYZ", produto: "NPK 20-05-20", quantidade: 8.0, placa: "DEF-5678", motorista: "Maria Santos", horario: "15:30", data: "18/01/2024", status: "aguardando", fotosTotal: 0, warehouseId: 11 },
@@ -89,7 +89,7 @@ const Carregamento = () => {
   return (
     <div className="min-h-screen bg-background">
       <PageHeader
-        title="Controle de Carregamento"
+        title="Carregamentos"
         description="Acompanhe o status dos carregamentos em andamento"
       />
 
@@ -193,4 +193,4 @@ const Carregamento = () => {
   );
 };
 
-export default Carregamento;
+export default Carregamentos;

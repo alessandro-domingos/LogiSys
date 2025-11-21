@@ -161,6 +161,24 @@ role_permissions (
 
 The frontend `usePermissions` hook queries this table to dynamically show/hide menu items and control access to features.
 
+#### Matriz de Permissões (Frontend)
+
+A tabela abaixo descreve os recursos acessíveis no frontend para cada role e suas respectivas ações:
+
+| Role      | Recursos Acessíveis                                                                             | Ações Permitidas                                                                  |
+|-----------|-------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------|
+| admin     | estoque, liberacoes, agendamentos, carregamentos, clientes, armazens, colaboradores            | CRUD completo em todos os recursos                                                |
+| logistica | estoque, liberacoes, agendamentos, carregamentos, clientes, armazens                            | read, create, update (delete conforme permissões específicas)                     |
+| cliente   | agendamentos, liberacoes                                                                        | agendamentos (read, create), liberacoes (read)                                    |
+| armazem   | carregamentos, liberacoes, agendamentos                                                         | carregamentos (read, create), liberacoes (read), agendamentos (read)              |
+| comercial | liberacoes, agendamentos, clientes                                                              | Conforme permissões específicas definidas no banco                                |
+
+**Notas Importantes:**
+- O recurso **colaboradores** é exclusivamente gerenciado por usuários com role **admin**.
+- As permissões específicas de CRUD são controladas pela tabela `role_permissions` no banco de dados.
+- O menu do sistema se ajusta dinamicamente baseado nas permissões de cada usuário.
+- Apenas itens de menu que o usuário tem permissão `can_read` são exibidos.
+
 ### Menu Navigation Structure
 
 The application sidebar organizes features into two main groups:
