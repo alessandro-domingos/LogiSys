@@ -125,8 +125,8 @@ const Clientes = () => {
         throw new Error(`Erro ao criar cliente: ${error.message}`);
       }
 
-      if (!data.success) {
-        throw new Error(data.error || "Erro desconhecido");
+      if (data?.error || !data?.success) {
+        throw new Error(data?.error || "Falha ao atribuir role. Usuário não foi criado. Tente novamente ou contate suporte.");
       }
 
       console.log("✅ [SUCCESS] Cliente criado:", data.cliente);

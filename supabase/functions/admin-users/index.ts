@@ -9,7 +9,7 @@ const BodySchema = z.object({
   email: z.string().trim().email().max(255),
   password: z.string().min(6).max(128),
   nome: z.string().trim().min(2).max(100),
-  role: z.enum(["admin", "logistica", "armazem", "cliente", "comercial"]).default("cliente"),
+  role: z.enum(["admin", "logistica"]),
 });
 
 const corsHeaders = {
@@ -124,16 +124,35 @@ Deno.serve(async (req) => {
 
     const newUserId = created.user.id;
 
-    // Assign role (default "cliente" unless specified). Use upsert to avoid duplicates
-    const { error: roleErr } = await serviceClient
-      .from("user_roles")
-      .upsert({ user_id: newUserId, role }, { onConflict: "user_id,role" });
+    // Helper function to rollback user creation if role assignment fails
+    const assignRoleOrRollback = async (uid: string, desiredRole: string) => {
+      const { error: roleError } = await serviceClient
+        .from("user_roles")
+        .upsert({ user_id: uid, role: desiredRole }, { onConflict: "user_id,role" });
 
-    if (roleErr) {
-      return new Response(JSON.stringify({ error: "Failed to assign role", details: roleErr.message }), {
-        status: 500,
-        headers: { "content-type": "application/json", ...corsHeaders },
-      });
+      if (roleError) {
+        console.error("Role assignment failed, rolling back user:", roleError);
+        // Rollback: delete the auth user
+        const { error: deleteError } = await serviceClient.auth.admin.deleteUser(uid);
+        if (deleteError) {
+          console.error("Failed to rollback user creation:", deleteError);
+        }
+        throw new Error(`Failed to assign role: ${roleError.message}`);
+      }
+    };
+
+    // Assign role (admin or logistica only) with rollback on error
+    try {
+      await assignRoleOrRollback(newUserId, role);
+    } catch (error) {
+      return new Response(
+        JSON.stringify({ 
+          success: false,
+          error: "Falha ao atribuir role. Usuário não foi criado. Tente novamente ou contate suporte.",
+          details: error instanceof Error ? error.message : "Unknown error"
+        }),
+        { status: 500, headers: { "content-type": "application/json", ...corsHeaders } },
+      );
     }
 
     return new Response(JSON.stringify({ success: true, user_id: newUserId }), {

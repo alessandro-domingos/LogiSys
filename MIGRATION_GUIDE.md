@@ -63,14 +63,19 @@ Each entity table now contains:
 #### Before (Using Profiles):
 1. Create auth.users
 2. Auto-create profiles via trigger
-3. Assign role to user_roles (references profiles.id)
-4. Optionally create entity record
+3. Auto-assign default 'cliente' role via trigger
+4. Assign role to user_roles (references profiles.id)
+5. Optionally create entity record
 
-#### After (Entity-Based):
+#### After (Entity-Based with Explicit Role Assignment):
 1. Create auth.users
-2. Assign role to user_roles (references auth.users.id)
-3. Create entity record with user_id link
-4. No profiles table involved
+2. **Explicitly assign appropriate role** in user_roles (references auth.users.id)
+3. **Rollback user creation if role assignment fails**
+4. Create entity record with user_id link
+5. No profiles table involved
+6. No automatic default role assignment via trigger
+
+**Important:** As of migration 20251121173817, the `assign_default_role()` function and its associated triggers have been removed. All edge functions now explicitly assign roles during user creation and implement rollback mechanisms to prevent orphaned users without proper permissions.
 
 ## Migration Steps for Existing Deployments
 
@@ -101,6 +106,9 @@ supabase db push supabase/migrations/20251120_remove_profiles_dependencies.sql
 
 # 6. Drop profiles table (FINAL STEP - NO ROLLBACK)
 supabase db push supabase/migrations/20251120_drop_profiles_table.sql
+
+# 7. Remove default role trigger (Migration 20251121173817)
+supabase db push supabase/migrations/20251121173817_remove_default_role_trigger.sql
 ```
 
 ### Step 2: Data Migration (If Needed)

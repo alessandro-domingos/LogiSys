@@ -103,6 +103,15 @@ Available roles (defined in `user_role` enum):
 
 Roles are stored in the `user_roles` table with a many-to-one relationship to `auth.users`.
 
+### Role Assignment
+
+**Important:** Role assignment is handled **explicitly** by edge functions during user creation. There is no automatic default role assignment via database triggers. Each edge function is responsible for:
+1. Creating the user in `auth.users`
+2. Explicitly assigning the appropriate role in `user_roles`
+3. Rolling back the user creation if role assignment fails
+
+This ensures users always have the correct role and prevents orphaned users without proper permissions.
+
 ### User Creation Flow
 
 #### Creating a Cliente (Customer):
@@ -111,26 +120,28 @@ Roles are stored in the `user_roles` table with a many-to-one relationship to `a
 3. System calls the `create-customer-user` edge function
 4. Edge function:
    - Creates user in `auth.users` with temporary password
-   - Assigns the "cliente" role in `user_roles`
+   - **Explicitly assigns the "cliente" role** in `user_roles` (with rollback on error)
    - Creates record in `clientes` table with `user_id` link
    - Returns temporary credentials
-5. Temporary password must be changed on first login
+5. If role assignment fails, the user is deleted and an error is returned
+6. Temporary password must be changed on first login
 
 #### Managing System Users (Colaboradores Page):
 1. Admin accesses the Colaboradores page (only admin role can access)
 2. The page displays only users with roles 'admin' or 'logistica'
 3. Admins can:
-   - Create new users with any role (admin, logistica, armazem, comercial, cliente)
+   - Create new colaboradores with **only 'admin' or 'logistica' roles**
    - Update user roles via dropdown selection
    - View user details and creation dates
 4. System uses RPC functions:
    - `get_users_with_roles` to list all users (filtered on frontend for admin/logistica only)
    - Optional: `get_colaboradores` for direct backend filtering (see migration 20251121)
    - `update_user_role` to change user permissions
-   - `admin-users` edge function for user creation
+   - `admin-users` edge function for user creation (restricted to admin/logistica roles)
 5. All newly created users receive temporary passwords that must be changed on first login
+6. **Note:** Customers and warehouse users must be created on their respective pages (Clientes, Armazéns)
 
-**Note:** The Colaboradores page filters users and displays only roles admin and logistica. Only admin can create/modify users. For employee-specific data (CPF, cargo, departamento), a separate employee management feature would be needed.
+**Note:** The Colaboradores page is restricted to creating internal staff roles only (admin, logistica). For employee-specific data (CPF, cargo, departamento), the `create-colaborador-user` edge function should be used.
 
 #### Creating an Armazém User (Warehouse):
 1. Admin/Logística accesses the Armazéns page
@@ -140,10 +151,11 @@ Roles are stored in the `user_roles` table with a many-to-one relationship to `a
 3. System calls the `create-armazem-user` edge function
 4. Edge function:
    - Creates user in `auth.users` with temporary password
-   - Assigns the "armazem" role in `user_roles`
+   - **Explicitly assigns the "armazem" role** in `user_roles` (with rollback on error)
    - Creates/updates record in `armazens` table with `user_id` link
    - Returns temporary credentials
-5. Temporary password must be changed on first login
+5. If role assignment fails, the user is deleted and an error is returned
+6. Temporary password must be changed on first login
 
 ### Permissions System
 

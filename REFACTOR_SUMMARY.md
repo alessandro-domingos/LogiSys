@@ -40,19 +40,20 @@ auth.users ← user_roles
 
 ### Backend (Supabase)
 
-**Migrations (6 files):**
+**Migrations (7 files):**
 1. `20251120_create_colaboradores_table.sql` - New table for employees
 2. `20251120_add_user_id_to_armazens.sql` - Link warehouses to users
 3. `20251120_update_fks_to_auth_users.sql` - Update all foreign keys
 4. `20251120_update_get_users_function.sql` - Query entities instead of profiles
 5. `20251120_remove_profiles_dependencies.sql` - Remove triggers and policies
 6. `20251120_drop_profiles_table.sql` - Final step: drop profiles
+7. `20251121173817_remove_default_role_trigger.sql` - Remove automatic role assignment
 
 **Edge Functions (4 files):**
-- `supabase/functions/create-armazem-user/index.ts` (NEW)
-- `supabase/functions/create-colaborador-user/index.ts` (NEW)
-- `supabase/functions/create-customer-user/index.ts` (UPDATED)
-- `supabase/functions/admin-users/index.ts` (UPDATED)
+- `supabase/functions/create-armazem-user/index.ts` (UPDATED - explicit role assignment with rollback)
+- `supabase/functions/create-colaborador-user/index.ts` (UPDATED - restricted to admin/logistica, rollback)
+- `supabase/functions/create-customer-user/index.ts` (UPDATED - explicit role assignment with rollback)
+- `supabase/functions/admin-users/index.ts` (UPDATED - restricted to admin/logistica, rollback)
 
 ### Frontend (React/TypeScript)
 
@@ -107,25 +108,31 @@ All `created_by`, `updated_by`, `uploaded_by` fields now reference `auth.users(i
 
 ## User Creation Workflows
 
+**Important Change (Migration 20251121173817):** Role assignment is now **explicit** in edge functions. The automatic default role trigger has been removed. Each edge function implements rollback on role assignment failure to prevent orphaned users.
+
 ### Cliente (Customer)
 1. Admin/Logística fills form in `/clientes`
 2. Calls `create-customer-user` edge function
-3. Creates: auth.users → user_roles (role: cliente) → clientes (user_id link)
-4. Returns temporary credentials
+3. Creates: auth.users → **explicitly assigns 'cliente' role** → clientes (user_id link)
+4. **Rollback: If role assignment fails, deletes auth.users and returns error**
+5. Returns temporary credentials
 
 ### Colaborador (Employee)
-1. Admin/Logística fills form in `/colaboradores`
-2. Selects role: comercial, logistica, or admin
-3. Calls `create-colaborador-user` edge function
-4. Creates: auth.users → user_roles (selected role) → colaboradores (user_id link)
-5. Returns temporary credentials
+1. Admin fills form in `/colaboradores`
+2. Selects role: **admin or logistica only** (restricted as of 20251121)
+3. Calls `create-colaborador-user` edge function (or `admin-users` from Colaboradores page)
+4. Creates: auth.users → **explicitly assigns selected role** → colaboradores (user_id link, if using create-colaborador-user)
+5. **Rollback: If role assignment fails, deletes auth.users and returns error**
+6. Returns temporary credentials
+7. **Note:** Customers and warehouse users must be created on their respective pages
 
 ### Armazém (Warehouse)
 1. Admin/Logística manages in `/armazens`
 2. Can create new warehouse with user or link existing
 3. Calls `create-armazem-user` edge function
-4. Creates: auth.users → user_roles (role: armazem) → armazens (user_id link)
-5. Returns temporary credentials
+4. Creates: auth.users → **explicitly assigns 'armazem' role** → armazens (user_id link)
+5. **Rollback: If role assignment fails, deletes auth.users and returns error**
+6. Returns temporary credentials
 
 ## Key Functions Updated
 
