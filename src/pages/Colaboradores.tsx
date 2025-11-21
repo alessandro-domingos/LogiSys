@@ -68,7 +68,7 @@ const Colaboradores = () => {
   const [newUserEmail, setNewUserEmail] = useState("");
   const [newUserNome, setNewUserNome] = useState("");
   const [newUserPassword, setNewUserPassword] = useState("");
-  const [newUserRole, setNewUserRole] = useState<UserRole>("cliente");
+  const [newUserRole, setNewUserRole] = useState<UserRole>("logistica");
   const [dialogOpen, setDialogOpen] = useState(false);
   const { toast } = useToast();
   const { hasRole } = useAuth();
@@ -132,22 +132,31 @@ const Colaboradores = () => {
         const errorMessage = error instanceof Error ? error.message : "Falha no servidor";
         toast({
           variant: "destructive",
-          title: "Erro ao criar usuário",
+          title: "Erro ao criar colaborador",
           description: errorMessage
+        });
+        return;
+      }
+
+      if (data?.error || !data?.success) {
+        toast({
+          variant: "destructive",
+          title: "Erro ao criar colaborador",
+          description: data?.error || "Falha ao atribuir role. Usuário não foi criado. Tente novamente ou contate suporte."
         });
         return;
       }
 
       if (data?.success) {
         toast({
-          title: "Usuário criado com sucesso!",
+          title: "Colaborador criado com sucesso!",
           description: `${newUserNome} foi adicionado ao sistema com a role ${newUserRole}`
         });
         
         setNewUserEmail("");
         setNewUserNome("");
         setNewUserPassword("");
-        setNewUserRole("cliente");
+        setNewUserRole("logistica");
         setDialogOpen(false);
         
         await new Promise(resolve => setTimeout(resolve, 500));
@@ -157,7 +166,7 @@ const Colaboradores = () => {
       const errorMessage = err instanceof Error ? err.message : "Erro desconhecido";
       toast({
         variant: "destructive",
-        title: "Erro ao criar usuário",
+        title: "Erro ao criar colaborador",
         description: errorMessage
       });
     }
@@ -220,14 +229,14 @@ const Colaboradores = () => {
             <DialogTrigger asChild>
               <Button className="bg-gradient-primary">
                 <UserPlus className="mr-2 h-4 w-4" />
-                Novo Usuário
+                Novo Colaborador
               </Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Criar Novo Usuário</DialogTitle>
+                <DialogTitle>Criar Novo Colaborador</DialogTitle>
                 <DialogDescription>
-                  Crie um novo usuário para o sistema selecionando o perfil apropriado.
+                  Crie um novo colaborador (Admin ou Logística). Clientes e armazéns são criados em suas respectivas páginas.
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-4">
@@ -269,11 +278,11 @@ const Colaboradores = () => {
                     <SelectContent>
                       <SelectItem value="admin">Administrador</SelectItem>
                       <SelectItem value="logistica">Logística</SelectItem>
-                      <SelectItem value="armazem">Armazém</SelectItem>
-                      <SelectItem value="comercial">Comercial</SelectItem>
-                      <SelectItem value="cliente">Cliente</SelectItem>
                     </SelectContent>
                   </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Para criar usuários de armazém ou clientes, use as páginas específicas.
+                  </p>
                 </div>
               </div>
               <DialogFooter>
@@ -281,7 +290,7 @@ const Colaboradores = () => {
                   Cancelar
                 </Button>
                 <Button onClick={handleCreateUser} className="bg-gradient-primary">
-                  Criar Usuário
+                  Criar Colaborador
                 </Button>
               </DialogFooter>
             </DialogContent>

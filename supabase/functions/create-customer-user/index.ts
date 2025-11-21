@@ -123,14 +123,32 @@ Deno.serve(async (req) => {
 
     const userId = authUser.user.id;
 
-    // 2. Assign role "cliente"
-    const { error: roleError } = await serviceClient
-      .from("user_roles")
-      .upsert({ user_id: userId, role: "cliente" }, { onConflict: "user_id,role" });
+    // Helper function to rollback user creation if role assignment fails
+    const assignRoleOrRollback = async (uid: string, desiredRole: string) => {
+      const { error: roleError } = await serviceClient
+        .from("user_roles")
+        .upsert({ user_id: uid, role: desiredRole }, { onConflict: "user_id,role" });
 
-    if (roleError) {
-      console.error("Role assignment error:", roleError);
-      // Continue anyway
+      if (roleError) {
+        console.error("Role assignment failed, rolling back user:", roleError);
+        // Rollback: delete the auth user
+        await serviceClient.auth.admin.deleteUser(uid);
+        throw new Error(`Failed to assign role: ${roleError.message}`);
+      }
+    };
+
+    // 2. Assign role "cliente" with rollback on error
+    try {
+      await assignRoleOrRollback(userId, "cliente");
+    } catch (error) {
+      return new Response(
+        JSON.stringify({ 
+          success: false,
+          error: "Falha ao atribuir role. Usuário não foi criado. Tente novamente ou contate suporte.",
+          details: error instanceof Error ? error.message : "Unknown error"
+        }),
+        { status: 500, headers: { "content-type": "application/json", ...corsHeaders } },
+      );
     }
 
     // 3. Create cliente record
@@ -161,6 +179,7 @@ Deno.serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: true,
+        user_id: userId,
         cliente,
         senha: senhaTemporaria,
       }),
