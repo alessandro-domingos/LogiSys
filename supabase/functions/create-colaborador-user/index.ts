@@ -131,7 +131,10 @@ Deno.serve(async (req) => {
       if (roleError) {
         console.error("Role assignment failed, rolling back user:", roleError);
         // Rollback: delete the auth user
-        await serviceClient.auth.admin.deleteUser(uid);
+        const { error: deleteError } = await serviceClient.auth.admin.deleteUser(uid);
+        if (deleteError) {
+          console.error("Failed to rollback user creation:", deleteError);
+        }
         throw new Error(`Failed to assign role: ${roleError.message}`);
       }
     };
