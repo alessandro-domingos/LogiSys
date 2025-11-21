@@ -11,7 +11,7 @@ import Estoque from "./pages/Estoque";
 import Liberacoes from "./pages/Liberacoes";
 import Agendamentos from "./pages/Agendamentos";
 import Carregamento from "./pages/Carregamento";
-import Admin from "./pages/Admin";
+
 import Armazens from "./pages/Armazens";
 import Clientes from "./pages/Clientes";
 import Colaboradores from "./pages/Colaboradores";
@@ -160,16 +160,7 @@ const App = () => (
                 </ProtectedRoute>
               }
             />
-            <Route
-              path="/admin"
-              element={
-                <ProtectedRoute resource="users">
-                  <Layout>
-                    <Admin />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
+
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

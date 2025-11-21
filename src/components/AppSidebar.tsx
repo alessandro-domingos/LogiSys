@@ -25,7 +25,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 
-const menuItems = [
+const upperMenuItems = [
   {
     title: "Dashboard",
     url: "/",
@@ -51,17 +51,14 @@ const menuItems = [
     resource: "agendamentos" as const,
   },
   {
-    title: "Armazéns",
-    url: "/armazens",
-    icon: Warehouse,
-    resource: "warehouses" as const,
-  },
-  {
-    title: "Carregamento",
+    title: "Carregamentos",
     url: "/carregamento",
     icon: Truck,
     resource: "loading_photos" as const,
   },
+];
+
+const lowerMenuItems = [
   {
     title: "Clientes",
     url: "/clientes",
@@ -69,22 +66,23 @@ const menuItems = [
     resource: "clientes" as const,
   },
   {
+    title: "Armazéns",
+    url: "/armazens",
+    icon: Warehouse,
+    resource: "warehouses" as const,
+  },
+  {
     title: "Colaboradores",
     url: "/colaboradores",
     icon: Users,
     resource: "colaboradores" as const,
-  },
-  {
-    title: "Administração",
-    url: "/admin",
-    icon: Settings,
-    resource: "users" as const,
+    requiresRole: ["admin", "logistica"] as const,
   },
 ];
 
 export function AppSidebar() {
   const { state } = useSidebar();
-  const { signOut } = useAuth();
+  const { signOut, userRole } = useAuth();
   const { canAccess, loading: permissionsLoading } = usePermissions();
   const isCollapsed = state === "collapsed";
 
@@ -92,20 +90,38 @@ export function AppSidebar() {
     await signOut();
   };
 
-  // Wait for permissions to load before filtering menu
-  const visibleMenuItems = permissionsLoading 
-    ? [menuItems[0]] // Show only Dashboard while loading
-    : menuItems.filter(item => {
-        if (!item.resource) {
-          console.log(`✅ [DEBUG] Menu item "${item.title}" - no resource required, showing`);
-          return true;
+  const filterMenuItems = (items: typeof upperMenuItems | typeof lowerMenuItems) => {
+    return items.filter(item => {
+      // Check role-based requirements
+      if ('requiresRole' in item && item.requiresRole) {
+        const hasRequiredRole = userRole ? item.requiresRole.includes(userRole as "admin" | "logistica") : false;
+        if (!hasRequiredRole) {
+          console.log(`❌ [DEBUG] Menu item "${item.title}" - requires role ${item.requiresRole.join(' or ')}, user has: ${userRole}`);
+          return false;
         }
-        const hasAccess = canAccess(item.resource, 'read');
-        console.log(`${hasAccess ? '✅' : '❌'} [DEBUG] Menu item "${item.title}" - resource: ${item.resource}, access: ${hasAccess}`);
-        return hasAccess;
-      });
+      }
+      
+      if (!item.resource) {
+        console.log(`✅ [DEBUG] Menu item "${item.title}" - no resource required, showing`);
+        return true;
+      }
+      const hasAccess = canAccess(item.resource, 'read');
+      console.log(`${hasAccess ? '✅' : '❌'} [DEBUG] Menu item "${item.title}" - resource: ${item.resource}, access: ${hasAccess}`);
+      return hasAccess;
+    });
+  };
 
-  console.log('✅ [DEBUG] Final visible menu items:', visibleMenuItems.map(i => i.title));
+  // Wait for permissions to load before filtering menu
+  const visibleUpperMenuItems = permissionsLoading 
+    ? [upperMenuItems[0]] // Show only Dashboard while loading
+    : filterMenuItems(upperMenuItems);
+
+  const visibleLowerMenuItems = permissionsLoading 
+    ? []
+    : filterMenuItems(lowerMenuItems);
+
+  console.log('✅ [DEBUG] Final visible upper menu items:', visibleUpperMenuItems.map(i => i.title));
+  console.log('✅ [DEBUG] Final visible lower menu items:', visibleLowerMenuItems.map(i => i.title));
 
   return (
     <Sidebar collapsible="icon">
@@ -126,7 +142,32 @@ export function AppSidebar() {
           <SidebarGroupLabel>Menu Principal</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {visibleMenuItems.map((item) => (
+              {visibleUpperMenuItems.map((item) => (
+                <SidebarMenuItem key={item.title}>
+                  <SidebarMenuButton asChild>
+                    <NavLink
+                      to={item.url}
+                      end={item.url === "/"}
+                      className={({ isActive }) =>
+                        isActive
+                          ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                          : "hover:bg-sidebar-accent/50"
+                      }
+                    >
+                      <item.icon className="h-4 w-4" />
+                      {!isCollapsed && <span>{item.title}</span>}
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarGroup>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {visibleLowerMenuItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild>
                     <NavLink
