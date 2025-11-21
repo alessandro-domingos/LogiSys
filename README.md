@@ -116,17 +116,20 @@ Roles are stored in the `user_roles` table with a many-to-one relationship to `a
    - Returns temporary credentials
 5. Temporary password must be changed on first login
 
-#### Creating a Colaborador (Employee):
+#### Managing System Users (Colaboradores Page):
 1. Admin/Logística accesses the Colaboradores page
-2. Fills out employee information (nome, CPF, email, cargo, departamento)
-3. Selects role (logistica, comercial, or admin)
-4. System calls the `create-colaborador-user` edge function
-5. Edge function:
-   - Creates user in `auth.users` with temporary password
-   - Assigns the selected role in `user_roles`
-   - Creates record in `colaboradores` table with `user_id` link
-   - Returns temporary credentials
-6. Temporary password must be changed on first login
+2. The page displays all system users with their assigned roles
+3. Admins can:
+   - Create new users with any role (admin, logistica, armazem, comercial, cliente)
+   - Update user roles via dropdown selection
+   - View user details and creation dates
+4. System uses RPC functions:
+   - `get_users_with_roles` to list all users
+   - `update_user_role` to change user permissions
+   - `admin-users` edge function for user creation
+5. All newly created users receive temporary passwords that must be changed on first login
+
+**Note:** This page manages system users and their access roles. For employee-specific data (CPF, cargo, departamento), a separate employee management feature would be needed.
 
 #### Creating an Armazém User (Warehouse):
 1. Admin/Logística accesses the Armazéns page
@@ -157,6 +160,24 @@ role_permissions (
 ```
 
 The frontend `usePermissions` hook queries this table to dynamically show/hide menu items and control access to features.
+
+### Menu Navigation Structure
+
+The application sidebar organizes features into two main groups:
+
+**Operations Group:**
+1. Dashboard - System overview
+2. Estoque - Inventory management
+3. Liberações - Release management
+4. Agendamentos - Scheduling
+5. Carregamentos - Loading operations
+
+**Management Group:**
+6. Clientes - Customer management
+7. Armazéns - Warehouse management
+8. Colaboradores - User & role management (visible only to admin and logistica roles)
+
+The menu dynamically adjusts based on user permissions, showing only accessible features for each role.
 
 ### Database Schema Changes (Migration from profiles table)
 
