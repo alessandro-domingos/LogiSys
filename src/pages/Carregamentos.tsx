@@ -6,8 +6,10 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Truck, X, Filter as FilterIcon, ChevronDown, ChevronUp } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 
-type StatusCarregamento = "aguardando" | "em_andamento" | "concluido" | "cancelado";
+type StatusCarregamento = "aguardando" | "liberado" | "carregando" | "carregado" | "nf_entregue";
 
 interface CarregamentoItem {
   id: number;
@@ -29,11 +31,73 @@ const parseDate = (d: string) => {
 };
 
 const Carregamentos = () => {
-  const [carregamentos] = useState<CarregamentoItem[]>([
-    { id: 1, cliente: "Cliente ABC", produto: "Ureia", quantidade: 4.0, placa: "ABC-1234", motorista: "João Silva", horario: "14:00", data: "18/01/2024", status: "em_andamento", fotosTotal: 2, warehouseId: 11 },
-    { id: 2, cliente: "Transportadora XYZ", produto: "NPK 20-05-20", quantidade: 8.0, placa: "DEF-5678", motorista: "Maria Santos", horario: "15:30", data: "18/01/2024", status: "aguardando", fotosTotal: 0, warehouseId: 11 },
-    { id: 3, cliente: "Fazenda Boa Vista", produto: "Super Simples", quantidade: 12.0, placa: "GHI-9012", motorista: "Pedro Costa", horario: "16:00", data: "19/01/2024", status: "aguardando", fotosTotal: 1, warehouseId: 12 },
-  ]);
+  // Fetch carregamentos from Supabase
+  const { data: carregamentosData, isLoading, error } = useQuery({
+    queryKey: ["carregamentos"],
+    queryFn: async () => {
+      console.debug("[DEBUG] Buscando carregamentos...");
+      const { data, error } = await supabase
+        .from("carregamentos")
+        .select(`
+          id,
+          status,
+          created_at,
+          agendamento:agendamentos!inner (
+            id,
+            horario,
+            data_retirada,
+            placa_caminhao,
+            motorista_nome,
+            quantidade,
+            liberacao:liberacoes!inner (
+              id,
+              pedido_interno,
+              cliente_id,
+              produtos:produto_id (
+                nome
+              ),
+              clientes:cliente_id (
+                nome
+              )
+            )
+          )
+        `)
+        .order("created_at", { ascending: false });
+      
+      if (error) {
+        console.error("[ERROR] Erro ao buscar carregamentos:", error);
+        throw error;
+      }
+      console.debug("[DEBUG] Carregamentos carregados:", data?.length);
+      return data;
+    },
+    refetchInterval: 30000, // Atualiza a cada 30s
+  });
+
+  // Transform data from Supabase to UI format
+  const carregamentos = useMemo(() => {
+    if (!carregamentosData) return [];
+    return carregamentosData.map((item: any) => {
+      const agendamento = item.agendamento;
+      const liberacao = agendamento?.liberacao;
+      
+      return {
+        id: item.id,
+        cliente: liberacao?.clientes?.nome || "N/A",
+        produto: liberacao?.produtos?.nome || "N/A",
+        quantidade: agendamento?.quantidade || 0,
+        placa: agendamento?.placa_caminhao || "N/A",
+        motorista: agendamento?.motorista_nome || "N/A",
+        horario: agendamento?.horario || "00:00",
+        data: agendamento?.data_retirada 
+          ? new Date(agendamento.data_retirada).toLocaleDateString("pt-BR")
+          : "N/A",
+        status: item.status || "aguardando",
+        fotosTotal: 0, // Placeholder - will be implemented in future stages
+        warehouseId: undefined,
+      } as CarregamentoItem;
+    });
+  }, [carregamentosData]);
 
   /* Filtros compactos + colapsáveis */
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -43,7 +107,7 @@ const Carregamentos = () => {
   const [dateTo, setDateTo] = useState("");
   const [selectedWarehouses, setSelectedWarehouses] = useState<(string | number)[]>([]);
 
-  const allStatuses: StatusCarregamento[] = ["aguardando", "em_andamento", "concluido", "cancelado"];
+  const allStatuses: StatusCarregamento[] = ["aguardando", "liberado", "carregando", "carregado", "nf_entregue"];
   const allWarehouses = useMemo(() => Array.from(new Set(carregamentos.map((c) => c.warehouseId).filter(Boolean))) as (string | number)[], [carregamentos]);
 
   const toggleStatus = (st: StatusCarregamento) => setSelectedStatuses((prev) => (prev.includes(st) ? prev.filter((s) => s !== st) : [...prev, st]));
@@ -79,12 +143,64 @@ const Carregamentos = () => {
   const getStatusBadgeVariant = (status: StatusCarregamento) => {
     switch (status) {
       case "aguardando": return "secondary";
-      case "em_andamento": return "default";
-      case "concluido": return "default";
-      case "cancelado": return "destructive";
+      case "liberado": return "default";
+      case "carregando": return "default";
+      case "carregado": return "default";
+      case "nf_entregue": return "default";
       default: return "outline";
     }
   };
+
+  const getStatusLabel = (status: StatusCarregamento) => {
+    switch (status) {
+      case "aguardando": return "Aguardando";
+      case "liberado": return "Liberado";
+      case "carregando": return "Carregando";
+      case "carregado": return "Carregado";
+      case "nf_entregue": return "NF Entregue";
+      default: return status;
+    }
+  };
+
+  // Show loading state
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <PageHeader
+          title="Carregamentos"
+          description="Acompanhe o status dos carregamentos em andamento"
+        />
+        <div className="container mx-auto px-6 py-12 text-center">
+          <div className="flex justify-center items-center gap-2">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            <span className="text-muted-foreground">Carregando carregamentos...</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error state
+  if (error) {
+    return (
+      <div className="min-h-screen bg-background">
+        <PageHeader
+          title="Carregamentos"
+          description="Acompanhe o status dos carregamentos em andamento"
+        />
+        <div className="container mx-auto px-6 py-12">
+          <Card className="border-destructive">
+            <CardContent className="p-6">
+              <div className="text-center text-destructive">
+                <p className="font-semibold">Erro ao carregar carregamentos</p>
+                <p className="text-sm mt-2">{error instanceof Error ? error.message : "Erro desconhecido"}</p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -115,7 +231,7 @@ const Carregamentos = () => {
                 <div className="flex flex-wrap gap-2">
                   {allStatuses.map((st) => {
                     const active = selectedStatuses.includes(st);
-                    const label = st === "aguardando" ? "Aguardando" : st === "em_andamento" ? "Em Andamento" : st === "concluido" ? "Concluído" : "Cancelado";
+                    const label = getStatusLabel(st);
                     return (
                       <Badge key={st} onClick={() => toggleStatus(st)} className={`cursor-pointer text-xs px-2 py-1 ${active ? "bg-gradient-primary text-white" : "bg-muted text-gray-700 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-900"}`}>
                         {label}
@@ -175,7 +291,7 @@ const Carregamentos = () => {
                     </div>
                     <div className="flex flex-col items-end gap-2">
                       <Badge variant={getStatusBadgeVariant(carr.status)}>
-                        {carr.status === "em_andamento" ? "Em Andamento" : carr.status.charAt(0).toUpperCase() + carr.status.slice(1)}
+                        {getStatusLabel(carr.status)}
                       </Badge>
                       <div className="text-xs text-muted-foreground">Fotos: <span className="font-semibold">{carr.fotosTotal}</span></div>
                     </div>
