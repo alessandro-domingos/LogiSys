@@ -23,6 +23,32 @@ const WEAK_PASSWORDS = [
   'qwerty'
 ];
 
+// Type definitions for better type safety
+interface SupabaseError {
+  message: string;
+  code?: string;
+  status?: number;
+  details?: string;
+  hint?: string;
+}
+
+interface ErrorResponse {
+  error: string;
+  details: string;
+  stage: string;
+  email?: string;
+  role?: string;
+  timestamp: string;
+  request_id: string;
+  supabase_error_code?: string | number;
+  envStatus?: {
+    hasUrl: boolean;
+    hasAnon: boolean;
+    hasServiceRole: boolean;
+  };
+  suggestions?: string[];
+}
+
 // Custom error class for role assignment failures
 class RoleAssignmentError extends Error {
   code: string;
@@ -117,9 +143,9 @@ Deno.serve(async (req) => {
     // Normalize email to lowercase
     const email = rawEmail.toLowerCase();
     
-    // Weak password check (case-insensitive)
+    // Weak password check (case-insensitive, exact match only)
     const passwordLower = password.toLowerCase();
-    if (WEAK_PASSWORDS.some(weak => passwordLower === weak || passwordLower.includes(weak))) {
+    if (WEAK_PASSWORDS.some(weak => passwordLower === weak)) {
       console.log(`[admin-users] Weak password detected for ${email}`);
       return new Response(
         JSON.stringify({
@@ -244,8 +270,9 @@ Deno.serve(async (req) => {
       console.error(`[admin-users] User creation failed:`, createErr);
       
       // Check for duplicate user pattern using both error code and message
-      const errorCode = (createErr as any)?.code || (createErr as any)?.status;
-      const errorMsg = createErr?.message?.toLowerCase() || '';
+      const supabaseErr = createErr as unknown as SupabaseError;
+      const errorCode = supabaseErr?.code || supabaseErr?.status?.toString();
+      const errorMsg = supabaseErr?.message?.toLowerCase() || '';
       const isDuplicate = errorCode === '23505' || // PostgreSQL unique violation
                           errorCode === 'PGRST116' || // PostgREST unique violation
                           errorMsg.includes('already exists') ||
@@ -253,9 +280,9 @@ Deno.serve(async (req) => {
                           errorMsg.includes('unique');
       
       const statusCode = isDuplicate ? 409 : 500;
-      const errorResponse: any = {
+      const errorResponse: ErrorResponse = {
         error: isDuplicate ? "User already exists" : "Failed to create user",
-        details: createErr?.message || "Database error creating new user",
+        details: supabaseErr?.message || "Database error creating new user",
         stage: "createUser",
         email,
         role,
@@ -318,10 +345,11 @@ Deno.serve(async (req) => {
           console.error("[admin-users] Failed to rollback user creation:", deleteError);
         }
         // Throw custom error with structured details
+        const supabaseErr = roleError as unknown as SupabaseError;
         throw new RoleAssignmentError(
-          roleError.message,
-          (roleError as any).code || 'ROLE_ASSIGNMENT_FAILED',
-          roleError.details || roleError.hint || 'Database error during role assignment'
+          supabaseErr.message,
+          supabaseErr.code || 'ROLE_ASSIGNMENT_FAILED',
+          supabaseErr.details || supabaseErr.hint || 'Database error during role assignment'
         );
       }
     };
