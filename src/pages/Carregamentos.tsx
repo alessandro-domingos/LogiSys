@@ -12,7 +12,7 @@ import { supabase } from "@/integrations/supabase/client";
 type StatusCarregamento = "aguardando" | "liberado" | "carregando" | "carregado" | "nf_entregue";
 
 interface CarregamentoItem {
-  id: number;
+  id: string;
   cliente: string;
   produto: string;
   quantidade: number;
