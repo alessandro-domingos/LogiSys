@@ -25,6 +25,31 @@ interface CarregamentoItem {
   warehouseId?: number | string;
 }
 
+interface SupabaseCarregamentoItem {
+  id: string;
+  status: StatusCarregamento | null;
+  created_at: string | null;
+  agendamento: {
+    id: string;
+    horario: string;
+    data_retirada: string;
+    placa_caminhao: string;
+    motorista_nome: string;
+    quantidade: number;
+    liberacao: {
+      id: string;
+      pedido_interno: string;
+      cliente_id: string;
+      produtos: {
+        nome: string;
+      } | null;
+      clientes: {
+        nome: string;
+      } | null;
+    } | null;
+  } | null;
+}
+
 const parseDate = (d: string) => {
   const [dd, mm, yyyy] = d.split("/");
   return new Date(Number(yyyy), Number(mm) - 1, Number(dd));
@@ -35,7 +60,7 @@ const Carregamentos = () => {
   const { data: carregamentosData, isLoading, error } = useQuery({
     queryKey: ["carregamentos"],
     queryFn: async () => {
-      console.debug("[DEBUG] Buscando carregamentos...");
+      console.log("🔍 [DEBUG] Buscando carregamentos...");
       const { data, error } = await supabase
         .from("carregamentos")
         .select(`
@@ -65,10 +90,10 @@ const Carregamentos = () => {
         .order("created_at", { ascending: false });
       
       if (error) {
-        console.error("[ERROR] Erro ao buscar carregamentos:", error);
+        console.error("❌ [ERROR] Erro ao buscar carregamentos:", error);
         throw error;
       }
-      console.debug("[DEBUG] Carregamentos carregados:", data?.length);
+      console.log("✅ [DEBUG] Carregamentos carregados:", data?.length);
       return data;
     },
     refetchInterval: 30000, // Atualiza a cada 30s
@@ -77,7 +102,7 @@ const Carregamentos = () => {
   // Transform data from Supabase to UI format
   const carregamentos = useMemo(() => {
     if (!carregamentosData) return [];
-    return carregamentosData.map((item: any) => {
+    return carregamentosData.map((item: SupabaseCarregamentoItem) => {
       const agendamento = item.agendamento;
       const liberacao = agendamento?.liberacao;
       
