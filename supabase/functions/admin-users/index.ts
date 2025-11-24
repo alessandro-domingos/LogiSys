@@ -89,6 +89,7 @@ Deno.serve(async (req) => {
   }
 
   console.log(logPrefix, 'Start request', { email, role, request_id });
+  console.log(logPrefix, 'Creating user', { email, role });
 
   const serviceClient = createClient(supabaseUrl!, serviceRoleKey!);
 
@@ -150,7 +151,7 @@ Deno.serve(async (req) => {
   }
 
   const newUserId = created.user.id;
-  console.log(logPrefix, 'User created', { newUserId });
+  console.log(logPrefix, 'User created', { userId: newUserId });
 
   // Post-create verification
   const verify = await serviceClient.auth.admin.getUserById(newUserId);
@@ -174,7 +175,7 @@ Deno.serve(async (req) => {
     .upsert({ user_id: newUserId, role }, { onConflict: 'user_id,role' });
 
   if (roleError) {
-    console.error(logPrefix, 'Role assignment error', roleError);
+    console.error(logPrefix, 'Role error, rolling back', roleError);
     await serviceClient.auth.admin.deleteUser(newUserId);
     return jsonResponse({
       error: 'Failed to assign role',
@@ -187,13 +188,7 @@ Deno.serve(async (req) => {
     }, 500);
   }
 
-  // Non-critical profile upsert
-  const { error: profileErr } = await serviceClient
-    .from('profiles')
-    .upsert({ id: newUserId, nome, email }, { onConflict: 'id' });
-  if (profileErr) {
-    console.error(logPrefix, 'Profile upsert error (non-fatal)', profileErr);
-  }
+  console.log(logPrefix, 'Role assigned', { userId: newUserId, role });
 
   return jsonResponse({
     success: true,
