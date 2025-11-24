@@ -40,6 +40,9 @@ const corsHeaders = {
 };
 
 Deno.serve(async (req) => {
+  // Generate request ID early so it's available in all error handlers
+  const requestId = generateRequestId();
+  
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
@@ -51,7 +54,6 @@ Deno.serve(async (req) => {
     });
   }
 
-  const requestId = generateRequestId();
   console.log(`[admin-users] Starting request ${requestId}`);
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
@@ -227,10 +229,14 @@ Deno.serve(async (req) => {
     if (createErr || !created?.user) {
       console.error(`[admin-users] User creation failed:`, createErr);
       
-      // Check for duplicate user pattern
-      const isDuplicate = createErr?.message?.toLowerCase().includes('already exists') ||
-                          createErr?.message?.toLowerCase().includes('duplicate') ||
-                          createErr?.message?.toLowerCase().includes('unique');
+      // Check for duplicate user pattern using both error code and message
+      const errorCode = (createErr as any)?.code || (createErr as any)?.status;
+      const errorMsg = createErr?.message?.toLowerCase() || '';
+      const isDuplicate = errorCode === '23505' || // PostgreSQL unique violation
+                          errorCode === 'PGRST116' || // PostgREST unique violation
+                          errorMsg.includes('already exists') ||
+                          errorMsg.includes('duplicate') ||
+                          errorMsg.includes('unique');
       
       const statusCode = isDuplicate ? 409 : 500;
       const errorResponse: any = {
@@ -244,8 +250,8 @@ Deno.serve(async (req) => {
       };
       
       // Add supabase error code if available
-      if (createErr && ('status' in createErr || 'code' in createErr)) {
-        errorResponse.supabase_error_code = (createErr as any).status || (createErr as any).code;
+      if (errorCode) {
+        errorResponse.supabase_error_code = errorCode;
       }
       
       return new Response(JSON.stringify(errorResponse), {
@@ -264,7 +270,10 @@ Deno.serve(async (req) => {
     if (verifyError || !verifiedUser?.user) {
       console.error(`[admin-users] Post-creation verification failed:`, verifyError);
       // Rollback: delete the auth user
-      await serviceClient.auth.admin.deleteUser(newUserId);
+      const { error: deleteError } = await serviceClient.auth.admin.deleteUser(newUserId);
+      if (deleteError) {
+        console.error(`[admin-users] CRITICAL: Failed to rollback user ${newUserId} after verification failure:`, deleteError);
+      }
       return new Response(
         JSON.stringify({
           error: "User creation verification failed",
