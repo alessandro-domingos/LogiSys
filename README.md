@@ -102,6 +102,8 @@ Available roles (defined in `user_role` enum):
 
 Roles are stored in the `user_roles` table with a many-to-one relationship to `auth.users`.
 
+**Note:** Any prior static `roles` catalog table (with `name`, `description` columns) has been fully deprecated and removed as of 2025-11-24. The system exclusively uses the `user_role` enum and `user_roles` table for role management.
+
 **Single-Role Model:** The current system architecture assumes each user has exactly **one role** at a time. The `user_roles` table contains one row per user (identified by `user_id`). While the table structure technically supports multiple roles per user (for future extensibility), the application logic and frontend are designed around a single-role model.
 
 ### Role Assignment
@@ -260,11 +262,11 @@ All edge functions:
 
 ### Changelog
 
-#### 2025-11-24: Removed "comercial" Role
-- The `comercial` role has been completely removed from the system as it was not being used (0 users)
-- Updated `user_role` enum to only include: `admin`, `logistica`, `armazem`, `cliente`
-- Migration: `20251124_remove_comercial_role.sql`
-- All references removed from codebase, documentation, and UI
+For recent changes and updates, see [CHANGELOG.md](./CHANGELOG.md).
+
+Recent highlights:
+- **2025-11-24**: Dropped obsolete `public.roles` table (backup retained as `roles_backup_20251124`)
+- **2025-11-24**: Removed "comercial" role from `user_role` enum
 
 ---
 
