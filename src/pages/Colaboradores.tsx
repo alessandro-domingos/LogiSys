@@ -119,6 +119,8 @@ const Colaboradores = () => {
     }
 
     try {
+      console.log('🔍 [DEBUG] Tentando criar colaborador:', { email: newUserEmail, nome: newUserNome, role: newUserRole });
+      
       const { data, error } = await supabase.functions.invoke("admin-users", {
         body: {
           email: newUserEmail,
@@ -128,26 +130,31 @@ const Colaboradores = () => {
         },
       });
 
+      console.log('🔍 [DEBUG] Resposta da Edge Function:', { data, error });
+
       if (error) {
-        const errorMessage = error instanceof Error ? error.message : "Falha no servidor";
+        console.error('❌ [ERROR] Erro retornado pela Edge Function:', error);
+        const errorMessage = error instanceof Error ? error.message : JSON.stringify(error);
         toast({
           variant: "destructive",
           title: "Erro ao criar colaborador",
-          description: errorMessage
+          description: `Edge Function error: ${errorMessage}`
         });
         return;
       }
 
       if (data?.error || !data?.success) {
+        console.error('❌ [ERROR] Erro nos dados retornados:', data);
         toast({
           variant: "destructive",
           title: "Erro ao criar colaborador",
-          description: data?.error || "Falha ao atribuir role. Usuário não foi criado. Tente novamente ou contate suporte."
+          description: data?.details || data?.error || "Falha ao atribuir role. Usuário não foi criado."
         });
         return;
       }
 
       if (data?.success) {
+        console.log('✅ [SUCCESS] Colaborador criado com sucesso:', data);
         toast({
           title: "Colaborador criado com sucesso!",
           description: `${newUserNome} foi adicionado ao sistema com a role ${newUserRole}`
@@ -163,11 +170,12 @@ const Colaboradores = () => {
         fetchUsers();
       }
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "Erro desconhecido";
+      console.error('❌ [ERROR] Exceção ao criar colaborador:', err);
+      const errorMessage = err instanceof Error ? err.message : JSON.stringify(err);
       toast({
         variant: "destructive",
         title: "Erro ao criar colaborador",
-        description: errorMessage
+        description: `Exception: ${errorMessage}`
       });
     }
   };
