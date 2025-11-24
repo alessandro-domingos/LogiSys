@@ -2,6 +2,12 @@
 // Creates a new user and assigns role atomically using service role
 // Allows bootstrapping the first admin without authentication
 // Enhanced with stage-based error diagnostics, weak password checking, and verification
+//
+// Security Note: email/role are echoed in error responses to help clients correlate
+// failed requests. This does NOT enable user enumeration because:
+// - We echo back what the client sent (not revealing if users exist)
+// - 409 Duplicate errors intentionally reveal existence (required for proper handling)
+// - All errors occur in context of CREATE operations, not user lookup
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 import { z } from "https://deno.land/x/zod@v3.23.8/mod.ts";
