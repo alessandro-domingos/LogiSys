@@ -109,9 +109,24 @@ Deno.serve(async (req) => {
 
     let senhaTemporaria = gerarSenha();
 
-    // Garantir que a senha não está na blacklist
-    while (!validatePassword(senhaTemporaria)) {
+    // Garantir que a senha não está na blacklist (com limite de tentativas)
+    let attempts = 0;
+    const MAX_ATTEMPTS = 10;
+    while (!validatePassword(senhaTemporaria) && attempts < MAX_ATTEMPTS) {
       senhaTemporaria = gerarSenha();
+      attempts++;
+    }
+
+    // Se após MAX_ATTEMPTS ainda não gerou uma senha válida, retornar erro
+    if (!validatePassword(senhaTemporaria)) {
+      return new Response(
+        JSON.stringify({ 
+          success: false,
+          error: "Não foi possível gerar uma senha válida",
+          stage: "validation"
+        }),
+        { status: 500, headers: { "content-type": "application/json", ...corsHeaders } },
+      );
     }
 
     // Service role client
