@@ -2,6 +2,16 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 import { z } from "https://deno.land/x/zod@v3.23.8/mod.ts";
 
+// Blacklist de senhas fracas
+const WEAK_PASSWORDS = new Set(['123456', '12345678', 'password', 'senha123', 'admin123', 'qwerty']);
+
+// Validar senha gerada
+const validatePassword = (password: string): boolean => {
+  return password.length >= 6 && 
+         password.length <= 128 && 
+         !WEAK_PASSWORDS.has(password.toLowerCase());
+};
+
 const BodySchema = z.object({
   nome: z.string().trim().min(2).max(100),
   cnpj_cpf: z.string().trim().min(11).max(18),
@@ -97,7 +107,12 @@ Deno.serve(async (req) => {
       return senha;
     };
 
-    const senhaTemporaria = gerarSenha();
+    let senhaTemporaria = gerarSenha();
+
+    // Garantir que a senha não está na blacklist
+    while (!validatePassword(senhaTemporaria)) {
+      senhaTemporaria = gerarSenha();
+    }
 
     // Service role client
     const serviceClient = createClient(supabaseUrl, serviceRoleKey);

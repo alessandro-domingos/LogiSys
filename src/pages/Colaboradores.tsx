@@ -10,6 +10,7 @@ import { Users, UserPlus, Shield } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
+import { passwordSchema } from "@/lib/validationSchemas";
 import type { Database } from "@/integrations/supabase/types";
 
 type UserRole = Database['public']['Enums']['user_role'];
@@ -118,6 +119,17 @@ const Colaboradores = () => {
       return;
     }
 
+    // Validar senha usando o schema
+    const passwordValidation = passwordSchema.safeParse(newUserPassword);
+    if (!passwordValidation.success) {
+      toast({
+        variant: "destructive",
+        title: "Senha inválida",
+        description: passwordValidation.error.errors[0].message
+      });
+      return;
+    }
+
     try {
       console.log('🔍 [DEBUG] Tentando criar colaborador:', { email: newUserEmail, nome: newUserNome, role: newUserRole });
       
@@ -134,21 +146,50 @@ const Colaboradores = () => {
 
       if (error) {
         console.error('❌ [ERROR] Erro retornado pela Edge Function:', error);
-        const errorMessage = error instanceof Error ? error.message : JSON.stringify(error);
+        
+        // Tentar extrair detalhes do erro HTTP
+        let errorMessage = "Erro ao criar colaborador";
+        
+        if (error.message) {
+          errorMessage = error.message;
+        }
+        
         toast({
           variant: "destructive",
           title: "Erro ao criar colaborador",
-          description: `Edge Function error: ${errorMessage}`
+          description: errorMessage
         });
         return;
       }
 
       if (data?.error || !data?.success) {
         console.error('❌ [ERROR] Erro nos dados retornados:', data);
+        
+        // Construir mensagem de erro amigável
+        let errorMessage = data?.error || "Falha ao criar colaborador";
+        
+        // Se há detalhes, usar ao invés do erro genérico
+        if (data?.details) {
+          errorMessage = data.details;
+        }
+        
+        // Mensagens específicas por tipo de erro
+        if (data?.stage === 'validation') {
+          if (data?.error?.includes('Weak password')) {
+            errorMessage = "Senha muito fraca. Use pelo menos 6 caracteres e evite senhas comuns como '123456' ou 'senha123'.";
+          } else if (data?.details?.fieldErrors) {
+            errorMessage = "Verifique os campos: " + Object.keys(data.details.fieldErrors).join(', ');
+          }
+        } else if (data?.stage === 'createUser' && data?.error?.includes('already exists')) {
+          errorMessage = "Este email já está cadastrado no sistema.";
+        } else if (data?.stage === 'adminCheck' && data?.error?.includes('Forbidden')) {
+          errorMessage = "Você não tem permissão para criar usuários.";
+        }
+        
         toast({
           variant: "destructive",
           title: "Erro ao criar colaborador",
-          description: data?.details || data?.error || "Falha ao atribuir role. Usuário não foi criado."
+          description: errorMessage
         });
         return;
       }
@@ -275,6 +316,9 @@ const Colaboradores = () => {
                     onChange={(e) => setNewUserPassword(e.target.value)}
                     placeholder="Senha segura"
                   />
+                  <p className="text-xs text-muted-foreground">
+                    Mínimo 6 caracteres. Evite senhas comuns como '123456' ou 'senha123'.
+                  </p>
                 </div>
                  <div className="space-y-2">
                   <Label htmlFor="role">Role</Label>

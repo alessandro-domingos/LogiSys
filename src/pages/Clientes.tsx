@@ -122,11 +122,32 @@ const Clientes = () => {
 
       if (error) {
         console.error("❌ [ERROR] Erro ao chamar função:", error);
-        throw new Error(`Erro ao criar cliente: ${error.message}`);
+        
+        let errorMessage = "Erro ao criar cliente";
+        if (error.message) {
+          errorMessage = error.message;
+        }
+        
+        throw new Error(errorMessage);
       }
 
       if (data?.error || !data?.success) {
-        throw new Error(data?.error || "Falha ao atribuir role. Usuário não foi criado. Tente novamente ou contate suporte.");
+        console.error("❌ [ERROR] Erro nos dados retornados:", data);
+        
+        let errorMessage = data?.error || "Falha ao criar cliente";
+        
+        if (data?.details) {
+          errorMessage = data.details;
+        }
+        
+        // Mensagens específicas
+        if (data?.stage === 'validation' && data?.error?.includes('Weak password')) {
+          errorMessage = "Senha gerada muito fraca. Por favor, tente novamente.";
+        } else if (data?.stage === 'createUser' && errorMessage.includes('already exists')) {
+          errorMessage = "Este email já está cadastrado no sistema.";
+        }
+        
+        throw new Error(errorMessage);
       }
 
       console.log("✅ [SUCCESS] Cliente criado:", data.cliente);
