@@ -141,6 +141,16 @@ const Colaboradores = () => {
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
       const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
       
+      // Validate environment variables
+      if (!supabaseUrl || !supabaseAnonKey) {
+        toast({
+          variant: "destructive",
+          title: "Erro de configuração",
+          description: "Variáveis de ambiente do Supabase não configuradas."
+        });
+        return;
+      }
+      
       // Get current session for Authorization header
       const { data: { session } } = await supabase.auth.getSession();
       
@@ -175,6 +185,12 @@ const Colaboradores = () => {
         data = await response.json();
       } catch (parseError) {
         console.error('❌ [ERROR] Failed to parse response JSON:', parseError);
+        toast({
+          variant: "destructive",
+          title: "Erro ao criar colaborador",
+          description: "Resposta inválida do servidor. Verifique os logs para mais detalhes."
+        });
+        return;
       }
       
       console.log('🔍 [DEBUG] Resposta da Edge Function:', { status: response.status, data });
@@ -214,8 +230,17 @@ const Colaboradores = () => {
         return;
       }
       
-      // Success case
-      if (data?.success) {
+      // Success case - verify we have valid data
+      if (!data) {
+        toast({
+          variant: "destructive",
+          title: "Erro ao criar colaborador",
+          description: "Resposta vazia do servidor."
+        });
+        return;
+      }
+      
+      if (data.success) {
         console.log('✅ [SUCCESS] Colaborador criado com sucesso:', data);
         toast({
           title: "Colaborador criado com sucesso!",
@@ -235,7 +260,7 @@ const Colaboradores = () => {
         toast({
           variant: "destructive",
           title: "Erro ao criar colaborador",
-          description: data?.error || data?.details || "Resposta inesperada do servidor"
+          description: data.error || data.details || "Resposta inesperada do servidor"
         });
       }
     } catch (err) {
