@@ -137,36 +137,89 @@ const Colaboradores = () => {
     try {
       console.log('🔍 [DEBUG] Tentando criar colaborador:', { email: newUserEmail, nome: newUserNome, role: newUserRole });
       
-      const { data, error } = await supabase.functions.invoke("admin-users", {
-        body: {
+      // Get Supabase URL and anon key
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      
+      // Validate environment variables
+      if (!supabaseUrl || !supabaseAnonKey) {
+        toast({
+          variant: "destructive",
+          title: "Erro de configuração",
+          description: "Variáveis de ambiente do Supabase não configuradas."
+        });
+        return;
+      }
+      
+      // Get current session for Authorization header
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
+        toast({
+          variant: "destructive",
+          title: "Erro de autenticação",
+          description: "Sessão expirada. Faça login novamente."
+        });
+        return;
+      }
+      
+      // Make manual fetch request to have full control over response
+      const response = await fetch(`${supabaseUrl}/functions/v1/admin-users`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+          'apikey': supabaseAnonKey
+        },
+        body: JSON.stringify({
           email: newUserEmail,
           password: newUserPassword,
           nome: newUserNome,
           role: newUserRole,
-        },
+        })
       });
-
-      console.log('🔍 [DEBUG] Resposta da Edge Function:', { data, error });
-
-      if (error) {
-        console.error('❌ [ERROR] Erro retornado pela Edge Function:', error);
+      
+      // Parse response body
+      let data = null;
+      try {
+        data = await response.json();
+      } catch (parseError) {
+        console.error('❌ [ERROR] Failed to parse response JSON:', parseError);
+        toast({
+          variant: "destructive",
+          title: "Erro ao criar colaborador",
+          description: "Resposta inválida do servidor. Verifique os logs para mais detalhes."
+        });
+        return;
+      }
+      
+      console.log('🔍 [DEBUG] Resposta da Edge Function:', { status: response.status, data });
+      
+      // Handle non-2xx responses
+      if (!response.ok) {
+        console.error('❌ [ERROR] Edge Function returned non-2xx status:', response.status);
         
-        // Tentar extrair detalhes do erro HTTP
         let errorMessage = "Erro ao criar colaborador";
         
-        // FunctionsHttpError pode ter context com response
-        if (error. context?.body) {
-          try {
-            const errorBody = typeof error.context.body === 'string' 
-              ? JSON. parse(error.context.body) 
-              : error.context. body;
-            
-            errorMessage = errorBody.details || errorBody.error || error.message;
-          } catch (parseError) {
-            errorMessage = error.message || "Erro ao criar colaborador";
+        if (data) {
+          // Extract error message from backend response
+          if (data.details) {
+            errorMessage = data.details;
+          } else if (data.error) {
+            errorMessage = data.error;
           }
-        } else if (error.message) {
-          errorMessage = error.message;
+          
+          // Specific messages by stage
+          if (data.stage === 'validation' && data.error?.includes('Weak password')) {
+            errorMessage = "Senha muito fraca. Use pelo menos 6 caracteres e evite senhas comuns.";
+          } else if (data.stage === 'createUser' && data.error?.includes('already exists')) {
+            errorMessage = "Este email já está cadastrado no sistema.";
+          } else if (data.stage === 'createColaborador') {
+            // Nome duplicado ou email duplicado
+            errorMessage = data.details || "Falha ao criar registro de colaborador.";
+          } else if (data.stage === 'adminCheck' && data.error?.includes('Forbidden')) {
+            errorMessage = "Você não tem permissão para criar usuários.";
+          }
         }
         
         toast({
@@ -176,46 +229,21 @@ const Colaboradores = () => {
         });
         return;
       }
-
-      if (data?.error || ! data?. success) {
-        console.error('❌ [ERROR] Erro nos dados retornados:', data);
-        
-        // Construir mensagem de erro amigável
-        let errorMessage = data?.error || "Falha ao criar colaborador";
-        
-        // Se há detalhes, usar ao invés do erro genérico
-        if (data?. details) {
-          errorMessage = data.details;
-        }
-        
-        // Mensagens específicas por tipo de erro
-        if (data?.stage === 'validation') {
-          if (data?. error?.includes('Weak password')) {
-            errorMessage = "Senha muito fraca. Use pelo menos 6 caracteres e evite senhas comuns como '123456' ou 'senha123'. ";
-          } else if (data?.details?.fieldErrors) {
-            errorMessage = "Verifique os campos: " + Object.keys(data.details. fieldErrors).join(', ');
-          }
-        } else if (data?.stage === 'createUser' && data?.error?.includes('already exists')) {
-          errorMessage = "Este email já está cadastrado no sistema.";
-        } else if (data?.stage === 'createColaborador') {
-          // Erro específico ao criar registro em colaboradores (nome duplicado, etc)
-          errorMessage = data?. details || "Falha ao criar registro de colaborador. ";
-        } else if (data?. stage === 'adminCheck' && data?.error?.includes('Forbidden')) {
-          errorMessage = "Você não tem permissão para criar usuários.";
-        }
-        
+      
+      // Success case - verify we have valid data
+      if (!data) {
         toast({
           variant: "destructive",
           title: "Erro ao criar colaborador",
-          description: errorMessage
+          description: "Resposta vazia do servidor."
         });
         return;
       }
-
-      if (data?.success) {
+      
+      if (data.success) {
         console.log('✅ [SUCCESS] Colaborador criado com sucesso:', data);
         toast({
-          title: "Colaborador criado com sucesso! ",
+          title: "Colaborador criado com sucesso!",
           description: `${newUserNome} foi adicionado ao sistema com a role ${newUserRole}`
         });
         
@@ -227,6 +255,13 @@ const Colaboradores = () => {
         
         await new Promise(resolve => setTimeout(resolve, 500));
         fetchUsers();
+      } else {
+        // Unexpected response structure
+        toast({
+          variant: "destructive",
+          title: "Erro ao criar colaborador",
+          description: data.error || data.details || "Resposta inesperada do servidor"
+        });
       }
     } catch (err) {
       console.error('❌ [ERROR] Exceção ao criar colaborador:', err);
