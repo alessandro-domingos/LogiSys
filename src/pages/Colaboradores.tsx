@@ -119,16 +119,20 @@ const Colaboradores = () => {
       return;
     }
 
-    // Validar senha usando o schema
-    const passwordValidation = passwordSchema.safeParse(newUserPassword);
-    if (!passwordValidation.success) {
-      toast({
-        variant: "destructive",
-        title: "Senha inválida",
-        description: passwordValidation.error.errors[0].message
-      });
-      return;
-    }
+  // Validar senha usando o schema
+  const passwordValidation = passwordSchema.safeParse(newUserPassword);
+  if (!passwordValidation.success) {
+    const errorMessage = passwordValidation.error.issues[0]?.message || "Senha inválida";
+  
+    console.log('🔍 [DEBUG] Validação de senha falhou:', passwordValidation.error);
+  
+    toast({
+      variant: "destructive",
+      title: "Senha inválida",
+      description: errorMessage
+    });
+    return;
+  }
 
     try {
       console.log('🔍 [DEBUG] Tentando criar colaborador:', { email: newUserEmail, nome: newUserNome, role: newUserRole });
