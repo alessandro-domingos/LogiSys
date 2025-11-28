@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Warehouse, Plus, Filter as FilterIcon } from "lucide-react";
 
@@ -25,6 +25,11 @@ interface Armazem {
   nome: string;
   cidade: string;
   estado: string;
+  email: string;
+  telefone?: string;
+  endereco?: string;
+  capacidade_total?: number;
+  capacidade_disponivel?: number;
   ativo: boolean;
   created_at: string;
 }
@@ -40,7 +45,7 @@ const Armazens = () => {
       console.log("🔍 [DEBUG] Buscando armazéns...");
       const { data, error } = await supabase
         .from("armazens")
-        .select("id, nome, cidade, estado, ativo, created_at")
+        .select("id, nome, cidade, estado, email, telefone, endereco, capacidade_total, capacidade_disponivel, ativo, created_at")
         .order("cidade", { ascending: true });
       
       if (error) {
@@ -58,46 +63,116 @@ const Armazens = () => {
     nome: "",
     cidade: "",
     estado: "",
+    email: "",
+    telefone: "",
+    endereco: "",
+    capacidade_total: "",
+  });
+
+  const [credenciaisModal, setCredenciaisModal] = useState({
+    show: false,
+    email: "",
+    senha: "",
+    nome: "",
   });
 
   const [filterStatus, setFilterStatus] = useState<"all" | "ativo" | "inativo">("all");
   const [searchTerm, setSearchTerm] = useState("");
 
   const resetForm = () => {
-    setNovoArmazem({ nome: "", cidade: "", estado: "" });
+    setNovoArmazem({
+      nome: "",
+      cidade: "",
+      estado: "",
+      email: "",
+      telefone: "",
+      endereco: "",
+      capacidade_total: "",
+    });
   };
 
   const handleCreateArmazem = async () => {
-    const { nome, cidade, estado } = novoArmazem;
+    const { nome, cidade, estado, email, telefone, endereco, capacidade_total } = novoArmazem;
 
-    if (!nome.trim() || !cidade.trim() || !estado) {
-      toast({ variant: "destructive", title: "Preencha todos os campos" });
+    if (!nome.trim() || !cidade.trim() || !estado || !email.trim()) {
+      toast({ variant: "destructive", title: "Preencha os campos obrigatórios" });
       return;
     }
 
     try {
-      console.log("🔍 [DEBUG] Criando armazém:", { nome, cidade, estado });
+      console.log("🔍 [DEBUG] Criando armazém:", { nome, cidade, estado, email });
 
-      const { data, error } = await supabase
-        .from("armazens")
-        .insert({ nome: nome.trim(), cidade: cidade.trim(), estado, ativo: true })
-        .select()
-        .single();
+      // Call Edge Function
+      const { data, error } = await supabase.functions.invoke('create-armazem-user', {
+        body: {
+          nome: nome.trim(),
+          email: email.trim(),
+          cidade: cidade.trim(),
+          estado,
+          telefone: telefone?.trim() || null,
+          endereco: endereco?.trim() || null,
+          capacidade_total: capacidade_total ? parseFloat(capacidade_total) : null,
+        }
+      });
 
       if (error) {
-        console.error("❌ [ERROR] Erro ao criar armazém:", error);
-        throw new Error(`${error.message} (${error.code || 'N/A'})`);
+        console.error("❌ [ERROR] Erro ao chamar função:", error);
+        
+        let errorMessage = "Erro ao criar armazém";
+        if (error.message) {
+          errorMessage = error.message;
+        }
+        
+        throw new Error(errorMessage);
       }
 
-      console.log("✅ [SUCCESS] Armazém criado:", data);
+      if (data?.error || !data?.success) {
+        console.error("❌ [ERROR] Erro nos dados retornados:", data);
+        
+        let errorMessage = data?.error || "Falha ao criar armazém";
+        
+        if (data?.details) {
+          errorMessage = data.details;
+        }
+        
+        // Mensagens específicas em português
+        if (data?.stage === 'validation' && data?.error?.includes('Weak password')) {
+          errorMessage = "Senha gerada muito fraca. Por favor, tente novamente.";
+        } else if (data?.error?.includes('duplicate key') || data?.error?.includes('already exists')) {
+          if (data?.error?.includes('email')) {
+            errorMessage = "Este email já está cadastrado no sistema.";
+          } else if (data?.error?.includes('nome')) {
+            errorMessage = "Já existe um armazém com este nome.";
+          } else if (data?.error?.includes('cidade')) {
+            errorMessage = "Já existe um armazém nesta cidade.";
+          } else {
+            errorMessage = "Este registro já existe no sistema.";
+          }
+        } else if (data?.error?.includes('Invalid payload')) {
+          errorMessage = "Campos obrigatórios faltando ou inválidos.";
+        }
+        
+        throw new Error(errorMessage);
+      }
 
-      toast({ title: "Armazém criado com sucesso!" });
+      console.log("✅ [SUCCESS] Armazém criado:", data.armazem);
+
+      // Show credentials modal
+      setCredenciaisModal({
+        show: true,
+        email: email.trim(),
+        senha: data.senha,
+        nome: nome.trim()
+      });
+
       resetForm();
       setDialogOpen(false);
       queryClient.invalidateQueries({ queryKey: ["armazens-filtro"] });
       queryClient.invalidateQueries({ queryKey: ["armazens-ativos"] });
       queryClient.invalidateQueries({ queryKey: ["armazens"] });
+
     } catch (err: unknown) {
+      console.error("❌ [ERROR] Erro geral:", err);
       toast({
         variant: "destructive",
         title: "Erro ao criar armazém",
@@ -194,60 +269,157 @@ const Armazens = () => {
                 Novo Armazém
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
-                <DialogTitle>Novo Armazém</DialogTitle>
+                <DialogTitle>Cadastrar Novo Armazém</DialogTitle>
+                <DialogDescription>
+                  Preencha os dados do armazém. Um usuário de acesso será criado automaticamente.
+                </DialogDescription>
               </DialogHeader>
-              <div className="space-y-3 py-1">
-                <div className="space-y-2">
-                  <Label htmlFor="nome">Nome *</Label>
-                  <Input
-                    id="nome"
-                    value={novoArmazem.nome}
-                    onChange={(e) => setNovoArmazem((s) => ({ ...s, nome: e.target.value }))}
-                    placeholder="Ex: Armazém Central"
-                  />
+              <div className="space-y-4 py-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="col-span-2">
+                    <Label htmlFor="nome">Nome *</Label>
+                    <Input
+                      id="nome"
+                      value={novoArmazem.nome}
+                      onChange={(e) => setNovoArmazem({ ...novoArmazem, nome: e.target.value })}
+                      placeholder="Ex: Armazém Central"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="email">Email *</Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      value={novoArmazem.email}
+                      onChange={(e) => setNovoArmazem({ ...novoArmazem, email: e.target.value })}
+                      placeholder="email@exemplo.com"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="telefone">Telefone</Label>
+                    <Input
+                      id="telefone"
+                      value={novoArmazem.telefone}
+                      onChange={(e) => setNovoArmazem({ ...novoArmazem, telefone: e.target.value })}
+                      placeholder="(00) 00000-0000"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="cidade">Cidade *</Label>
+                    <Input
+                      id="cidade"
+                      value={novoArmazem.cidade}
+                      onChange={(e) => setNovoArmazem({ ...novoArmazem, cidade: e.target.value })}
+                      placeholder="Ex: São Paulo"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="estado">Estado (UF) *</Label>
+                    <Select
+                      value={novoArmazem.estado}
+                      onValueChange={(value) => setNovoArmazem({ ...novoArmazem, estado: value })}
+                    >
+                      <SelectTrigger id="estado">
+                        <SelectValue placeholder="Selecione o estado" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {estadosBrasil.map((uf) => (
+                          <SelectItem key={uf} value={uf}>
+                            {uf}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="col-span-2">
+                    <Label htmlFor="endereco">Endereço</Label>
+                    <Input
+                      id="endereco"
+                      value={novoArmazem.endereco}
+                      onChange={(e) => setNovoArmazem({ ...novoArmazem, endereco: e.target.value })}
+                      placeholder="Rua, número, complemento"
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <Label htmlFor="capacidade_total">Capacidade Total</Label>
+                    <Input
+                      id="capacidade_total"
+                      type="number"
+                      value={novoArmazem.capacidade_total}
+                      onChange={(e) => setNovoArmazem({ ...novoArmazem, capacidade_total: e.target.value })}
+                      placeholder="Capacidade total de armazenamento"
+                    />
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="cidade">Cidade *</Label>
-                  <Input
-                    id="cidade"
-                    value={novoArmazem.cidade}
-                    onChange={(e) => setNovoArmazem((s) => ({ ...s, cidade: e.target.value }))}
-                    placeholder="Ex: São Paulo"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="estado">Estado (UF) *</Label>
-                  <Select
-                    value={novoArmazem.estado}
-                    onValueChange={(v) => setNovoArmazem((s) => ({ ...s, estado: v }))}
-                  >
-                    <SelectTrigger id="estado">
-                      <SelectValue placeholder="Selecione o estado" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {estadosBrasil.map((uf) => (
-                        <SelectItem key={uf} value={uf}>
-                          {uf}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+                <p className="text-xs text-muted-foreground">
+                  * Campos obrigatórios. Um usuário será criado automaticamente com uma senha temporária.
+                </p>
               </div>
               <DialogFooter>
                 <Button variant="outline" onClick={() => setDialogOpen(false)}>
                   Cancelar
                 </Button>
-                <Button className="bg-gradient-primary" onClick={handleCreateArmazem}>
-                  Salvar
+                <Button onClick={handleCreateArmazem}>
+                  Criar Armazém
                 </Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
         }
       />
+
+      {/* Credentials Modal */}
+      <Dialog open={credenciaisModal.show} onOpenChange={(open) => setCredenciaisModal({...credenciaisModal, show: open})}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>✅ Armazém cadastrado com sucesso!</DialogTitle>
+            <DialogDescription>
+              Credenciais de acesso criadas. Envie ao responsável pelo armazém por email ou WhatsApp.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="rounded-lg border p-4 space-y-3 bg-muted/50">
+              <p className="text-sm font-medium">Credenciais de acesso para:</p>
+              <p className="text-base font-semibold">{credenciaisModal.nome}</p>
+              
+              <div className="space-y-2">
+                <div>
+                  <Label className="text-xs text-muted-foreground">Email:</Label>
+                  <p className="font-mono text-sm">{credenciaisModal.email}</p>
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Senha temporária:</Label>
+                  <p className="font-mono text-sm font-bold">{credenciaisModal.senha}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/20 p-3">
+              <p className="text-xs text-amber-800 dark:text-amber-200">
+                ⚠️ <strong>Importante:</strong> Envie estas credenciais ao responsável pelo armazém. 
+                Por segurança, esta senha só aparece uma vez. O usuário será obrigado a trocar a senha no primeiro login.
+              </p>
+            </div>
+          </div>
+          <DialogFooter className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                const texto = `Credenciais de acesso ao LogiSys\n\nEmail: ${credenciaisModal.email}\nSenha: ${credenciaisModal.senha}\n\nImportante: Troque a senha no primeiro acesso.`;
+                navigator.clipboard.writeText(texto);
+                toast({ title: "Credenciais copiadas!" });
+              }}
+            >
+              📋 Copiar credenciais
+            </Button>
+            <Button onClick={() => setCredenciaisModal({ show: false, email: "", senha: "", nome: "" })}>
+              Fechar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Filters */}
       <div className="container mx-auto px-6 pt-3">
