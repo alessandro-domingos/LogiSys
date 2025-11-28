@@ -6,17 +6,6 @@ ALTER TABLE public.armazens
   ADD COLUMN IF NOT EXISTS capacidade_total DECIMAL(10, 2),
   ADD COLUMN IF NOT EXISTS capacidade_disponivel DECIMAL(10, 2);
 
--- Create unique constraint for email (if not already exists from UNIQUE above)
-DO $$ 
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_constraint 
-    WHERE conname = 'armazens_email_unique'
-  ) THEN
-    ALTER TABLE public.armazens ADD CONSTRAINT armazens_email_unique UNIQUE (email);
-  END IF;
-END $$;
-
 -- Create index for email lookups
 CREATE INDEX IF NOT EXISTS idx_armazens_email ON public.armazens(email);
 

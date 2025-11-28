@@ -519,12 +519,10 @@ const Armazens = () => {
                   {armazem.endereco && (
                     <p><span className="text-muted-foreground">Endereço:</span> {armazem.endereco}</p>
                   )}
-                  {armazem.capacidade_total !== null && armazem.capacidade_total !== undefined && (
+                  {armazem.capacidade_total != null && (
                     <p>
                       <span className="text-muted-foreground">Capacidade:</span> {armazem.capacidade_total}t 
-                      {armazem.capacidade_disponivel !== null && armazem.capacidade_disponivel !== undefined 
-                        ? ` / Disponível: ${armazem.capacidade_disponivel}t`
-                        : ' / Disponível: —'}
+                      {` / Disponível: ${armazem.capacidade_disponivel != null ? `${armazem.capacidade_disponivel}t` : '—'}`}
                     </p>
                   )}
                 </div>
