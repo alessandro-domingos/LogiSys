@@ -102,6 +102,17 @@ const Armazens = () => {
     try {
       console.log("🔍 [DEBUG] Criando armazém:", { nome, cidade, estado, email });
 
+      // Validate and parse capacidade_total
+      let capacidadeTotalValue = null;
+      if (capacidade_total) {
+        const parsed = parseFloat(capacidade_total);
+        if (isNaN(parsed) || parsed < 0) {
+          toast({ variant: "destructive", title: "Capacidade total deve ser um número válido" });
+          return;
+        }
+        capacidadeTotalValue = parsed;
+      }
+
       // Call Edge Function
       const { data, error } = await supabase.functions.invoke('create-armazem-user', {
         body: {
@@ -111,7 +122,7 @@ const Armazens = () => {
           estado,
           telefone: telefone?.trim() || null,
           endereco: endereco?.trim() || null,
-          capacidade_total: capacidade_total ? parseFloat(capacidade_total) : null,
+          capacidade_total: capacidadeTotalValue,
         }
       });
 
@@ -209,7 +220,7 @@ const Armazens = () => {
           armazem.nome.toLowerCase().includes(term) ||
           armazem.cidade.toLowerCase().includes(term) ||
           armazem.estado.toLowerCase().includes(term) ||
-          armazem.email.toLowerCase().includes(term);
+          (armazem.email && armazem.email.toLowerCase().includes(term));
         if (!matches) return false;
       }
       
@@ -357,7 +368,7 @@ const Armazens = () => {
       />
 
       {/* Credentials Modal */}
-      <Dialog open={credenciaisModal.show} onOpenChange={(open) => setCredenciaisModal({...credenciaisModal, show: open})}>
+      <Dialog open={credenciaisModal.show} onOpenChange={(open) => setCredenciaisModal((prev) => ({...prev, show: open}))}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>✅ Armazém cadastrado com sucesso!</DialogTitle>
@@ -466,7 +477,9 @@ const Armazens = () => {
                 </div>
                 
                 <div className="mt-3 space-y-1 text-sm">
-                  <p><span className="text-muted-foreground">Email:</span> {armazem.email}</p>
+                  {armazem.email && (
+                    <p><span className="text-muted-foreground">Email:</span> {armazem.email}</p>
+                  )}
                   {armazem.telefone && (
                     <p><span className="text-muted-foreground">Telefone:</span> {armazem.telefone}</p>
                   )}
