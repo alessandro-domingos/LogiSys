@@ -17,6 +17,9 @@ const BodySchema = z.object({
   email: z.string().trim().email().max(255),
   cidade: z.string().trim().min(2),
   estado: z.string().length(2),
+  telefone: z.string().trim().optional(),
+  endereco: z.string().trim().optional(),
+  capacidade_total: z.number().optional(),
   armazem_id: z.string().uuid().optional(), // If linking to existing armazem
 });
 
@@ -60,7 +63,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    const { nome, email, cidade, estado, armazem_id } = parsed.data;
+    const { nome, email, cidade, estado, telefone, endereco, capacidade_total, armazem_id } = parsed.data;
 
     // Check if requester is admin or logistica
     const userClient = createClient(supabaseUrl, supabaseAnonKey, {
@@ -204,8 +207,13 @@ Deno.serve(async (req) => {
         .from("armazens")
         .insert({
           nome,
+          email,
           cidade,
           estado,
+          telefone: telefone || null,
+          endereco: endereco || null,
+          capacidade_total: capacidade_total || null,
+          capacidade_disponivel: capacidade_total || null,
           user_id: userId,
           ativo: true,
         })
