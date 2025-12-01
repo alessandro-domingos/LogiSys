@@ -145,6 +145,22 @@ Deno.serve(async (req) => {
     });
 
     if (authError || !authUser?.user) {
+      // Check if error is due to duplicate email
+      const errorMsg = authError?.message?.toLowerCase() || '';
+      const isDuplicateEmail = errorMsg.includes('already been registered') || 
+                                errorMsg.includes('already exists') ||
+                                errorMsg.includes('duplicate');
+      
+      if (isDuplicateEmail) {
+        return new Response(
+          JSON.stringify({ 
+            error: "Duplicidade", 
+            details: "Já existe um cliente com este email."
+          }),
+          { status: 409, headers: { "content-type": "application/json", ...corsHeaders } },
+        );
+      }
+      
       return new Response(
         JSON.stringify({ error: "Failed to create user", details: authError?.message }),
         { status: 500, headers: { "content-type": "application/json", ...corsHeaders } },
@@ -203,6 +219,38 @@ Deno.serve(async (req) => {
       .single();
 
     if (clienteError) {
+      // Check if error is due to duplicate CNPJ/CPF or email
+      const errorMsg = clienteError.message?.toLowerCase() || '';
+      const errorCode = (clienteError as any).code || '';
+      
+      const isDuplicateCNPJ = errorMsg.includes('clientes_cnpj_cpf') || 
+                               errorMsg.includes('cnpj_cpf') ||
+                               errorCode === '23505' && (errorMsg.includes('cnpj') || errorMsg.includes('cpf'));
+      const isDuplicateEmail = errorMsg.includes('clientes_email') || 
+                                errorMsg.includes('duplicate') && errorMsg.includes('email');
+      
+      if (isDuplicateCNPJ || isDuplicateEmail) {
+        // Rollback: delete the auth user since cliente creation failed
+        console.error("Cliente creation failed due to duplicate, rolling back user:", clienteError);
+        await serviceClient.auth.admin.deleteUser(userId);
+        
+        const duplicateMessage = isDuplicateCNPJ 
+          ? "Já existe um cliente com este CNPJ/CPF."
+          : "Já existe um cliente com este email.";
+        
+        return new Response(
+          JSON.stringify({ 
+            error: "Duplicidade", 
+            details: duplicateMessage
+          }),
+          { status: 409, headers: { "content-type": "application/json", ...corsHeaders } },
+        );
+      }
+      
+      // For other errors, also rollback
+      console.error("Cliente creation failed, rolling back user:", clienteError);
+      await serviceClient.auth.admin.deleteUser(userId);
+      
       return new Response(
         JSON.stringify({ error: "Failed to create cliente", details: clienteError.message }),
         { status: 500, headers: { "content-type": "application/json", ...corsHeaders } },

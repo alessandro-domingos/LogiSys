@@ -91,22 +91,29 @@ export async function createCustomer(
         };
       }
 
-      // Handle 409 - Conflict/Duplicate
-      if (response.status === 409) {
+      // Handle 409 - Conflict/Duplicate or explicit Duplicidade error
+      if (response.status === 409 || (data && String(data.error) === 'Duplicidade')) {
+        // Prefer backend's details message if available and meaningful
         let duplicateMessage = 'Já existe um registro com estes dados.';
         
-        if (data?.details) {
-          const details = data.details.toLowerCase();
-          if (details.includes('clientes_email_unique') || details.includes('email')) {
-            duplicateMessage = 'Este email já está cadastrado no sistema.';
-          } else if (details.includes('clientes_cnpj_cpf_unique') || details.includes('cnpj') || details.includes('cpf')) {
-            duplicateMessage = 'Este CNPJ/CPF já está cadastrado no sistema.';
+        if (data?.details && typeof data.details === 'string') {
+          // Use backend message if it's already user-friendly (starts with "Já existe")
+          if (data.details.startsWith('Já existe')) {
+            duplicateMessage = data.details;
+          } else {
+            // Otherwise, parse the backend message for specifics
+            const details = data.details.toLowerCase();
+            if (details.includes('clientes_email_unique') || details.includes('email')) {
+              duplicateMessage = 'Este email já está cadastrado no sistema.';
+            } else if (details.includes('clientes_cnpj_cpf_unique') || details.includes('cnpj') || details.includes('cpf')) {
+              duplicateMessage = 'Este CNPJ/CPF já está cadastrado no sistema.';
+            }
           }
         }
 
         return {
           success: false,
-          status: 409,
+          status: response.status,
           error: 'Duplicidade',
           details: duplicateMessage
         };

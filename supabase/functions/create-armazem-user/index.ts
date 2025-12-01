@@ -144,6 +144,22 @@ Deno.serve(async (req) => {
     });
 
     if (authError || !authUser?.user) {
+      // Check if error is due to duplicate email
+      const errorMsg = authError?.message?.toLowerCase() || '';
+      const isDuplicateEmail = errorMsg.includes('already been registered') || 
+                                errorMsg.includes('already exists') ||
+                                errorMsg.includes('duplicate');
+      
+      if (isDuplicateEmail) {
+        return new Response(
+          JSON.stringify({ 
+            error: "Duplicidade", 
+            details: "Já existe um armazém com este email."
+          }),
+          { status: 409, headers: { "content-type": "application/json", ...corsHeaders } },
+        );
+      }
+      
       return new Response(
         JSON.stringify({ error: "Failed to create user", details: authError?.message }),
         { status: 500, headers: { "content-type": "application/json", ...corsHeaders } },
@@ -195,6 +211,10 @@ Deno.serve(async (req) => {
         .single();
 
       if (updateError) {
+        // Rollback on link error
+        console.error("Failed to link armazem, rolling back user:", updateError);
+        await serviceClient.auth.admin.deleteUser(userId);
+        
         return new Response(
           JSON.stringify({ error: "Failed to link armazem", details: updateError.message }),
           { status: 500, headers: { "content-type": "application/json", ...corsHeaders } },
@@ -221,6 +241,40 @@ Deno.serve(async (req) => {
         .single();
 
       if (createError) {
+        // Check if error is due to duplicate nome or cidade
+        const errorMsg = createError.message?.toLowerCase() || '';
+        const errorCode = (createError as any).code || '';
+        
+        const isDuplicateNome = errorMsg.includes('armazens_nome') || 
+                                 errorCode === '23505' && errorMsg.includes('nome');
+        const isDuplicateCidade = errorMsg.includes('armazens_cidade') || 
+                                   errorCode === '23505' && errorMsg.includes('cidade');
+        
+        if (isDuplicateNome || isDuplicateCidade) {
+          // Rollback: delete the auth user since armazem creation failed
+          console.error("Armazem creation failed due to duplicate, rolling back user:", createError);
+          await serviceClient.auth.admin.deleteUser(userId);
+          
+          let duplicateMessage = "Já existe um armazém com estes dados.";
+          if (isDuplicateNome) {
+            duplicateMessage = "Já existe um armazém com este nome.";
+          } else if (isDuplicateCidade) {
+            duplicateMessage = "Já existe um armazém nesta cidade.";
+          }
+          
+          return new Response(
+            JSON.stringify({ 
+              error: "Duplicidade", 
+              details: duplicateMessage
+            }),
+            { status: 409, headers: { "content-type": "application/json", ...corsHeaders } },
+          );
+        }
+        
+        // For other errors, also rollback
+        console.error("Armazem creation failed, rolling back user:", createError);
+        await serviceClient.auth.admin.deleteUser(userId);
+        
         return new Response(
           JSON.stringify({ error: "Failed to create armazem", details: createError.message }),
           { status: 500, headers: { "content-type": "application/json", ...corsHeaders } },

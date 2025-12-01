@@ -90,24 +90,31 @@ export async function createWarehouse(
         };
       }
 
-      // Handle 409 - Conflict/Duplicate
-      if (response.status === 409) {
+      // Handle 409 - Conflict/Duplicate or explicit Duplicidade error
+      if (response.status === 409 || (data && String(data.error) === 'Duplicidade')) {
+        // Prefer backend's details message if available and meaningful
         let duplicateMessage = 'Já existe um registro com estes dados.';
         
-        if (data?.details) {
-          const details = data.details.toLowerCase();
-          if (details.includes('armazens_nome_unique') || (details.includes('nome') && details.includes('duplicate'))) {
-            duplicateMessage = 'Já existe um armazém com este nome.';
-          } else if (details.includes('armazens_cidade_unique') || (details.includes('cidade') && details.includes('duplicate'))) {
-            duplicateMessage = 'Já existe um armazém nesta cidade.';
-          } else if (details.includes('email') && details.includes('duplicate')) {
-            duplicateMessage = 'Este email já está cadastrado no sistema.';
+        if (data?.details && typeof data.details === 'string') {
+          // Use backend message if it's already user-friendly (starts with "Já existe")
+          if (data.details.startsWith('Já existe')) {
+            duplicateMessage = data.details;
+          } else {
+            // Otherwise, parse the backend message for specifics
+            const details = data.details.toLowerCase();
+            if (details.includes('armazens_nome_unique') || (details.includes('nome') && details.includes('duplicate'))) {
+              duplicateMessage = 'Já existe um armazém com este nome.';
+            } else if (details.includes('armazens_cidade_unique') || (details.includes('cidade') && details.includes('duplicate'))) {
+              duplicateMessage = 'Já existe um armazém nesta cidade.';
+            } else if (details.includes('email') && details.includes('duplicate')) {
+              duplicateMessage = 'Este email já está cadastrado no sistema.';
+            }
           }
         }
 
         return {
           success: false,
-          status: 409,
+          status: response.status,
           error: 'Duplicidade',
           details: duplicateMessage
         };
