@@ -40,6 +40,12 @@ export async function createCustomer(
   authToken?: string
 ): Promise<CreateCustomerResponse> {
   try {
+    // Normalize CNPJ/CPF by removing non-numeric characters
+    const normalizedPayload = {
+      ...payload,
+      cnpj_cpf: payload.cnpj_cpf.replace(/\D/g, '')
+    };
+
     // Make manual fetch request for full control over response
     const response = await fetch(`${supabaseUrl}/functions/v1/create-customer-user`, {
       method: 'POST',
@@ -48,7 +54,7 @@ export async function createCustomer(
         'Authorization': `Bearer ${authToken}`,
         'apikey': supabaseAnonKey
       },
-      body: JSON.stringify(payload)
+      body: JSON.stringify(normalizedPayload)
     });
 
     // Parse response body

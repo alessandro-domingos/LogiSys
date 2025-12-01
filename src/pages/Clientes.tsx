@@ -104,11 +104,8 @@ const Clientes = () => {
       return;
     }
 
-    // Normalize CNPJ/CPF by removing non-numeric characters
-    const cnpjCpfNormalized = cnpj_cpf.replace(/\D/g, '');
-
     try {
-      console.log("🔍 [DEBUG] Criando cliente:", { nome, cnpj_cpf: cnpjCpfNormalized, email });
+      console.log("🔍 [DEBUG] Criando cliente:", { nome, cnpj_cpf, email });
 
       // Get Supabase URL and anon key
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
@@ -136,13 +133,13 @@ const Clientes = () => {
         return;
       }
 
-      // Call service layer
+      // Call service layer (CNPJ/CPF normalization is handled by the service)
       const result = await createCustomer(
         supabaseUrl,
         supabaseAnonKey,
         {
           nome: nome.trim(),
-          cnpj_cpf: cnpjCpfNormalized,
+          cnpj_cpf: cnpj_cpf.trim(),
           email: email.trim(),
           telefone: telefone?.trim() || null,
           endereco: endereco?.trim() || null,
