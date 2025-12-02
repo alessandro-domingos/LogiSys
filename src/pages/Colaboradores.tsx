@@ -203,6 +203,12 @@ const handleCreateUser = async () => {
           // Detalhes de erro do Zod: mensagens de campo amigáveis
           errorMessage = Object.values(data.details.fieldErrors)
             .flat()
+            .map(msg => {
+              if (msg === "Invalid email") return "Email inválido";
+              if (msg === "Required") return "Campo obrigatório";
+              if (msg.includes("at least")) return msg.replace("String must contain at least", "Mínimo de").replace("character(s)", "caracteres");
+              return msg;
+            })
             .join(" | ");
         } else {
           // Se details é string ou similar
