@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Users, Plus, Tag } from "lucide-react";
+import { Tag, Plus } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -19,6 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import type { Database } from "@/integrations/supabase/types";
+import { usePermissions } from "@/hooks/usePermissions";
 
 type Unidade = "t" | "kg" | "";
 
@@ -31,6 +32,7 @@ type Produto = Database['public']['Tables']['produtos']['Row'];
 
 const Produtos = () => {
   const { toast } = useToast();
+  const { canAccess, loading: permissionsLoading } = usePermissions();
 
   // Dados
   const [produtos, setProdutos] = useState<Produto[]>([]);
@@ -48,6 +50,34 @@ const Produtos = () => {
 
   // Filtros
   const [searchTerm, setSearchTerm] = useState("");
+
+  // -- Permissão: espera para carregar antes de qualquer coisa
+  if (permissionsLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="text-center">
+          <div className="h-12 w-12 animate-spin rounded-full border-4 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Carregando permissões...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // -- Permissão: acesso negado
+  if (!canAccess("produtos", "read")) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="text-center">
+          <p className="text-destructive font-semibold text-lg">
+            Acesso negado
+          </p>
+          <p className="text-muted-foreground mt-2">
+            Você não tem permissão para acessar esta página.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   const fetchProdutos = async () => {
     setLoading(true);
@@ -190,59 +220,61 @@ const Produtos = () => {
         subtitle="Gerencie os produtos cadastrados no sistema"
         icon={Tag}
         actions={
-          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-            <DialogTrigger asChild>
-              <Button className="bg-gradient-primary">
-                <Plus className="mr-2 h-4 w-4" />
-                Novo Produto
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-md">
-              <DialogHeader>
-                <DialogTitle>Cadastrar Novo Produto</DialogTitle>
-                <DialogDescription>
-                  Preencha os dados do produto para cadastrar no sistema.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4 py-4">
-                <div>
-                  <Label htmlFor="nome">Nome *</Label>
-                  <Input
-                    id="nome"
-                    value={novoProduto.nome}
-                    onChange={(e) => setNovoProduto({ ...novoProduto, nome: e.target.value })}
-                    placeholder="Nome do produto"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="unidade">Unidade *</Label>
-                  <Select
-                    value={novoProduto.unidade}
-                    onValueChange={(value) => setNovoProduto({ ...novoProduto, unidade: value as Unidade })}
-                  >
-                    <SelectTrigger id="unidade">
-                      <SelectValue placeholder="Selecione a unidade do produto" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="t">{unidadeLabels.t}</SelectItem>
-                      <SelectItem value="kg">{unidadeLabels.kg}</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  * Campos obrigatórios.
-                </p>
-              </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setDialogOpen(false)}>
-                  Cancelar
+          canAccess("produtos", "create") && (
+            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+              <DialogTrigger asChild>
+                <Button className="bg-gradient-primary">
+                  <Plus className="mr-2 h-4 w-4" />
+                  Novo Produto
                 </Button>
-                <Button className="bg-gradient-primary" onClick={handleCreateProduto}>
-                  Criar Produto
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+              </DialogTrigger>
+              <DialogContent className="max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Cadastrar Novo Produto</DialogTitle>
+                  <DialogDescription>
+                    Preencha os dados do produto para cadastrar no sistema.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  <div>
+                    <Label htmlFor="nome">Nome *</Label>
+                    <Input
+                      id="nome"
+                      value={novoProduto.nome}
+                      onChange={(e) => setNovoProduto({ ...novoProduto, nome: e.target.value })}
+                      placeholder="Nome do produto"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="unidade">Unidade *</Label>
+                    <Select
+                      value={novoProduto.unidade}
+                      onValueChange={(value) => setNovoProduto({ ...novoProduto, unidade: value as Unidade })}
+                    >
+                      <SelectTrigger id="unidade">
+                        <SelectValue placeholder="Selecione a unidade do produto" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="t">{unidadeLabels.t}</SelectItem>
+                        <SelectItem value="kg">{unidadeLabels.kg}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    * Campos obrigatórios.
+                  </p>
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setDialogOpen(false)}>
+                    Cancelar
+                  </Button>
+                  <Button className="bg-gradient-primary" onClick={handleCreateProduto}>
+                    Criar Produto
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          )
         }
       />
 
