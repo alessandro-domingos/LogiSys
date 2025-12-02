@@ -58,11 +58,10 @@ const Clientes = () => {
     nome: "",
   });
 
+  const [detalhesCliente, setDetalhesCliente] = useState<Cliente | null>(null);
+
   const [filterStatus, setFilterStatus] = useState<"all" | "ativo" | "inativo">("all");
   const [searchTerm, setSearchTerm] = useState("");
-
-  // Novo: controla card expandido
-  const [expandedClienteId, setExpandedClienteId] = useState<string | null>(null);
 
   const resetForm = () => {
     setNovoCliente({
@@ -505,73 +504,72 @@ const Clientes = () => {
         </DialogContent>
       </Dialog>
 
+      {/* Modal de detalhes do cliente */}
+      <Dialog open={!!detalhesCliente} onOpenChange={open => !open && setDetalhesCliente(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Informações do Cliente</DialogTitle>
+            <DialogDescription>
+              Informações complementares de <b>{detalhesCliente?.nome}</b>
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 py-4">
+            <p><b>Email:</b> {detalhesCliente?.email}</p>
+            <p><b>Telefone:</b> {detalhesCliente?.telefone || "—"}</p>
+            <p><b>CEP:</b> {detalhesCliente?.cep || "—"}</p>
+            <p><b>Endereço:</b> {detalhesCliente?.endereco || "—"}</p>
+            <p><b>Cidade:</b> {detalhesCliente?.cidade || "—"}</p>
+            <p><b>Estado:</b> {detalhesCliente?.estado || "—"}</p>
+            <p><b>CNPJ/CPF:</b> {detalhesCliente?.cnpj_cpf || "—"}</p>
+            <p><b>Status:</b> {detalhesCliente?.ativo ? "Ativo" : "Inativo"}</p>
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setDetalhesCliente(null)}>
+              Fechar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Lista de clientes */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filteredClientes.map((cliente) => {
-          const isExpanded = expandedClienteId === cliente.id;
-          return (
-            <Card
-              key={cliente.id}
-              className={`cursor-pointer transition-all ${isExpanded ? "border-primary shadow-md bg-muted/50" : ""}`}
-              onClick={() => setExpandedClienteId(isExpanded ? null : cliente.id)}
-            >
-              <CardContent className="p-4 space-y-3">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-lg">{cliente.nome}</h3>
-                    <p className="text-sm text-muted-foreground">{cliente.email}</p>
-                  </div>
-                  <Badge variant={cliente.ativo ? "default" : "secondary"}>
+        {filteredClientes.map((cliente) => (
+          <Card
+            key={cliente.id}
+            className="cursor-pointer transition-all"
+            onClick={() => setDetalhesCliente(cliente)}
+          >
+            <CardContent className="p-4 space-y-3">
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <h3 className="font-semibold text-lg">{cliente.nome}</h3>
+                  <p className="text-sm text-muted-foreground">{cliente.email}</p>
+                </div>
+                <Badge variant={cliente.ativo ? "default" : "secondary"}>
+                  {cliente.ativo ? "Ativo" : "Inativo"}
+                </Badge>
+              </div>
+              <div className="space-y-1 text-sm">
+                <p>
+                  <span className="text-muted-foreground">CNPJ/CPF:</span> {cliente.cnpj_cpf}
+                </p>
+              </div>
+              {canCreate && (
+                <div className="flex items-center justify-between pt-3 border-t">
+                  <Label htmlFor={`switch-${cliente.id}`} className="text-sm">
                     {cliente.ativo ? "Ativo" : "Inativo"}
-                  </Badge>
+                  </Label>
+                  <Switch
+                    id={`switch-${cliente.id}`}
+                    checked={cliente.ativo}
+                    onCheckedChange={() => handleToggleAtivo(cliente.id, cliente.ativo)}
+                    onClick={e => e.stopPropagation()}
+                  />
                 </div>
-                <div className="space-y-1 text-sm">
-                  <p>
-                    <span className="text-muted-foreground">CNPJ/CPF:</span> {cliente.cnpj_cpf}
-                  </p>
-                  {/* Informações complementares (mostra só se expandido) */}
-                  {isExpanded && (
-                    <>
-                      {cliente.telefone && (
-                        <p>
-                          <span className="text-muted-foreground">Telefone:</span> {cliente.telefone}
-                        </p>
-                      )}
-                      {cliente.cep && (
-                        <p>
-                          <span className="text-muted-foreground">CEP:</span> {cliente.cep}
-                        </p>
-                      )}
-                      {cliente.endereco && (
-                        <p>
-                          <span className="text-muted-foreground">Endereço:</span> {cliente.endereco}
-                        </p>
-                      )}
-                      {cliente.cidade && cliente.estado && (
-                        <p>
-                          <span className="text-muted-foreground">Localização:</span> {cliente.cidade}/{cliente.estado}
-                        </p>
-                      )}
-                    </>
-                  )}
-                </div>
-                {canCreate && (
-                  <div className="flex items-center justify-between pt-3 border-t">
-                    <Label htmlFor={`switch-${cliente.id}`} className="text-sm">
-                      {cliente.ativo ? "Ativo" : "Inativo"}
-                    </Label>
-                    <Switch
-                      id={`switch-${cliente.id}`}
-                      checked={cliente.ativo}
-                      onCheckedChange={() => handleToggleAtivo(cliente.id, cliente.ativo)}
-                      onClick={e => e.stopPropagation()}
-                    />
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          );
-        })}
+              )}
+            </CardContent>
+          </Card>
+        ))}
       </div>
       {filteredClientes.length === 0 && (
         <div className="text-center py-12">
