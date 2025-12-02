@@ -163,13 +163,13 @@ const Estoque = () => {
 
     const qtdNum = Number(quantidade);
     if (Number.isNaN(qtdNum) || qtdNum <= 0) {
-      toast({ variant: "destructive", title: "Quantidade inválida", description: "Informe um valor numérico maior que zero." });
+      toast({ variant: "destructive", title: "Quantidade inválida", description: "Informe um valor maior que zero." });
       return;
     }
 
+    // 1. Buscar produto existente
+    let produtoId: string | undefined;
     try {
-      // Buscar produto ou criar (com tratamento de erro)
-      let produtoId: string;
       const { data: produtoExistente, error: errBusca } = await supabase
         .from("produtos")
         .select("id")
@@ -178,11 +178,11 @@ const Estoque = () => {
 
       if (errBusca) {
         toast({ variant: "destructive", title: "Erro ao buscar produto", description: errBusca.message });
-        console.error("❌ [ERROR] Buscar produto:", errBusca);
         return;
       }
 
-      if (produtoExistente) {
+      // 2. Criar produto se não existir
+      if (produtoExistente?.id) {
         produtoId = produtoExistente.id;
       } else {
         const { data: novoProd, error: errProd } = await supabase
@@ -192,13 +192,16 @@ const Estoque = () => {
           .single();
         if (errProd) {
           toast({ variant: "destructive", title: "Erro ao criar produto", description: errProd.message });
-          console.error("❌ [ERROR] Criar produto:", errProd);
           return;
         }
-        produtoId = novoProd!.id;
+        if (!novoProd?.id) {
+          toast({ variant: "destructive", title: "Falha ao criar produto", description: "Produto não criado corretamente no banco." });
+          return;
+        }
+        produtoId = novoProd.id;
       }
 
-      // Buscar armazém (com tratamento de erro)
+      // 3. Buscar armazém ativo
       const { data: armazemData, error: errArmazem } = await supabase
         .from("armazens")
         .select("id, nome, cidade, estado")
@@ -208,16 +211,13 @@ const Estoque = () => {
 
       if (errArmazem) {
         toast({ variant: "destructive", title: "Erro ao buscar armazém", description: errArmazem.message });
-        console.error("❌ [ERROR] Buscar armazém:", errArmazem);
         return;
       }
-
-      if (!armazemData) {
-        toast({ variant: "destructive", title: "Armazém não encontrado ou inativo" });
+      if (!armazemData?.id) {
+        toast({ variant: "destructive", title: "Armazém não encontrado ou inativo", description: "Selecione um armazém válido." });
         return;
       }
-
-      // Buscar estoque atual (com tratamento de erro)
+      // 4. Buscar estoque atual
       const { data: estoqueAtual, error: errBuscaEstoque } = await supabase
         .from("estoque")
         .select("quantidade")
@@ -227,16 +227,21 @@ const Estoque = () => {
 
       if (errBuscaEstoque) {
         toast({ variant: "destructive", title: "Erro ao buscar estoque", description: errBuscaEstoque.message });
-        console.error("❌ [ERROR] Buscar estoque:", errBuscaEstoque);
         return;
       }
 
       const estoqueAnterior = estoqueAtual?.quantidade || 0;
       const novaQuantidade = estoqueAnterior + qtdNum;
 
-      // Atualizar estoque com tratamento de erro
+      // **Verificação final antes do upsert**
+      if (!produtoId || !armazemData.id) {
+        toast({ variant: "destructive", title: "Produto ou armazém inválido", description: "Impossível registrar estoque. Confira os campos." });
+        return;
+      }
+
       const { data: userData } = await supabase.auth.getUser();
 
+      // 5. Upsert no estoque (cria ou atualiza)
       const { data: estoqueData, error: errEstoque } = await supabase
         .from("estoque")
         .upsert({
@@ -251,8 +256,11 @@ const Estoque = () => {
         .select();
 
       if (errEstoque) {
-        toast({ variant: "destructive", title: "Erro ao atualizar estoque", description: errEstoque.message });
-        console.error("❌ [ERROR] Atualizar estoque:", errEstoque);
+        let msg = errEstoque.message || "";
+        if (msg.includes("stack depth limit")) {
+          msg = "Erro interno no banco de dados. Produto ou armazém inexistente, ou existe trigger/FK inconsistente.";
+        }
+        toast({ variant: "destructive", title: "Erro ao atualizar estoque", description: msg });
         return;
       }
 
@@ -270,17 +278,17 @@ const Estoque = () => {
       if (err instanceof Error) errorMessage = err.message;
       toast({
         variant: "destructive",
-        title: "Erro ao criar produto",
+        title: "Erro inesperado ao criar produto",
         description: errorMessage
       });
-      console.error("❌ [ERROR] Criar produto:", err);
+      console.error("❌ [ERROR]", err);
     }
   };
 
   const handleUpdateQuantity = async (id: string) => {
     const newQty = Number(editQuantity);
     if (Number.isNaN(newQty) || newQty < 0) {
-      toast({ variant: "destructive", title: "Quantidade inválida", description: "Digite um valor válido maior ou igual a zero." });
+      toast({ variant: "destructive", title: "Quantidade inválida", description: "Digite um valor maior ou igual a zero." });
       return;
     }
 
@@ -297,25 +305,25 @@ const Estoque = () => {
         .select();
 
       if (error) {
-        toast({ variant: "destructive", title: "Erro ao atualizar", description: error.message });
-        console.error("❌ [ERROR] Atualizar estoque:", error);
+        toast({ variant: "destructive", title: "Erro ao atualizar estoque", description: error.message });
         return;
       }
 
       toast({ title: "Quantidade atualizada com sucesso!" });
       setEditingId(null);
       queryClient.invalidateQueries({ queryKey: ["estoque"] });
+
     } catch (err: unknown) {
       toast({
         variant: "destructive",
-        title: "Erro ao atualizar",
+        title: "Erro inesperado ao atualizar",
         description: err instanceof Error ? err.message : String(err)
       });
-      console.error("❌ [ERROR] Atualizar estoque:", err);
+      console.error("❌ [ERROR]", err);
     }
   };
 
-  /* ---------------- Filtros (compacto + colapsável) ---------------- */
+  // Filtros barra compacta/avançada
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [selectedStatuses, setSelectedStatuses] = useState<StockStatus[]>([]);
