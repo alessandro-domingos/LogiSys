@@ -67,6 +67,7 @@ const Armazens = () => {
     nome: "",
   });
 
+  // Filtros
   const [filterStatus, setFilterStatus] = useState<"all" | "ativo" | "inativo">("all");
   const [searchTerm, setSearchTerm] = useState("");
 
@@ -283,7 +284,8 @@ const Armazens = () => {
         const matches =
           armazem.nome.toLowerCase().includes(term) ||
           armazem.cidade.toLowerCase().includes(term) ||
-          armazem.estado.toLowerCase().includes(term);
+          armazem.estado.toLowerCase().includes(term) ||
+          armazem.email?.toLowerCase().includes(term);
         if (!matches) return false;
       }
       return true;
@@ -429,6 +431,31 @@ const Armazens = () => {
           )
         }
       />
+
+      {/* Filtros e busca */}
+      <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+        <div className="flex flex-col sm:flex-row gap-4 flex-1">
+          <div className="flex gap-2 items-center">
+            <FilterIcon className="h-4 w-4 text-muted-foreground" />
+            <Select value={filterStatus} onValueChange={(v) => setFilterStatus(v as "all" | "ativo" | "inativo")}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Filtrar por status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                <SelectItem value="ativo">Ativos</SelectItem>
+                <SelectItem value="inativo">Inativos</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <Input
+            placeholder="Buscar por nome, cidade, estado ou email..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="max-w-md"
+          />
+        </div>
+      </div>
 
       {/* Modal de credenciais temporárias do Armazém */}
       <Dialog
