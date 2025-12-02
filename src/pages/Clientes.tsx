@@ -112,6 +112,7 @@ const Clientes = () => {
 
   // Criação de cliente (mesmo padrão de Colaboradores)
 const handleCreateCliente = async () => {
+  window.alert("CHAMOU handleCreateCliente!");
   const { nome, cnpj_cpf, email, telefone, endereco, cidade, estado, cep } = novoCliente;
   if (!nome.trim() || !cnpj_cpf.trim() || !email.trim()) {
     toast({
