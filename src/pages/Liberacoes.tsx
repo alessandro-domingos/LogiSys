@@ -213,14 +213,7 @@ const Liberacoes = () => {
           data_liberacao: new Date().toISOString().split('T')[0],
           created_by: userData.user?.id,
         })
-        .select(`
-          id,
-          pedido_interno,
-          cliente_id,
-          clientes(nome),
-          produto:produtos(nome),
-          armazem:armazens(cidade)
-        `)
+        .select("id")
         .single();
 
       if (errLib) {
