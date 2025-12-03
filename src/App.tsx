@@ -12,6 +12,7 @@ import Liberacoes from "./pages/Liberacoes";
 import Agendamentos from "./pages/Agendamentos";
 import Carregamentos from "./pages/Carregamentos";
 
+import Produtos from "./pages/Produtos";
 import Armazens from "./pages/Armazens";
 import Clientes from "./pages/Clientes";
 import Colaboradores from "./pages/Colaboradores";
@@ -126,6 +127,16 @@ const App = () => (
                 <ProtectedRoute resource="carregamentos">
                   <Layout>
                     <Carregamentos />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/produtos"
+              element={
+                <ProtectedRoute resource="produtos">
+                  <Layout>
+                    <Produtos />
                   </Layout>
                 </ProtectedRoute>
               }

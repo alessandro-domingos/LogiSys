@@ -10,6 +10,7 @@ export type Resource =
   | 'liberacoes'
   | 'agendamentos'
   | 'carregamentos'
+  | 'produtos'
   | 'clientes'
   | 'armazens'
   | 'colaboradores';
