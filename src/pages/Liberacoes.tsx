@@ -291,9 +291,10 @@ const Liberacoes = () => {
                 <DialogTitle>Nova Liberação</DialogTitle>
               </DialogHeader>
               <div className="space-y-4 py-2">
+                {/* Produto combobox (igual Estoque, nome) */}
                 <div className="space-y-2">
                   <Label htmlFor="produto">Produto *</Label>
-                  <Select value={novaLiberacao.produto} onValueChange={(v) => setNovaLiberacao((s) => ({ ...s, produto: v }))}>
+                  <Select value={novaLiberacao.produto} onValueChange={(v) => setNovaLiberacao(s => ({ ...s, produto: v }))}>
                     <SelectTrigger id="produto">
                       <SelectValue placeholder="Selecione o produto" />
                     </SelectTrigger>
@@ -304,10 +305,11 @@ const Liberacoes = () => {
                     </SelectContent>
                   </Select>
                 </div>
-
+            
+                {/* Armazém combobox (igual Estoque, cidade - estado) */}
                 <div className="space-y-2">
                   <Label htmlFor="armazem">Armazém *</Label>
-                  <Select value={novaLiberacao.armazem} onValueChange={(v) => setNovaLiberacao((s) => ({ ...s, armazem: v }))}>
+                  <Select value={novaLiberacao.armazem} onValueChange={(v) => setNovaLiberacao(s => ({ ...s, armazem: v }))}>
                     <SelectTrigger id="armazem">
                       <SelectValue placeholder="Selecione o armazém" />
                     </SelectTrigger>
@@ -318,10 +320,11 @@ const Liberacoes = () => {
                     </SelectContent>
                   </Select>
                 </div>
-
+            
+                {/* Cliente combobox */}
                 <div className="space-y-2">
                   <Label htmlFor="cliente">Cliente *</Label>
-                  <Select value={novaLiberacao.cliente_id} onValueChange={(v) => setNovaLiberacao((s) => ({ ...s, cliente_id: v }))}>
+                  <Select value={novaLiberacao.cliente_id} onValueChange={(v) => setNovaLiberacao(s => ({ ...s, cliente_id: v }))}>
                     <SelectTrigger id="cliente">
                       <SelectValue placeholder="Selecione o cliente" />
                     </SelectTrigger>
@@ -334,17 +337,17 @@ const Liberacoes = () => {
                     </SelectContent>
                   </Select>
                 </div>
-
+            
                 <div className="space-y-2">
                   <Label htmlFor="pedido">Número do Pedido *</Label>
                   <Input 
                     id="pedido" 
                     value={novaLiberacao.pedido} 
-                    onChange={(e) => setNovaLiberacao((s) => ({ ...s, pedido: e.target.value }))} 
+                    onChange={e => setNovaLiberacao(s => ({ ...s, pedido: e.target.value }))} 
                     placeholder="Ex: PED-2024-001"
                   />
                 </div>
-
+            
                 <div className="space-y-2">
                   <Label htmlFor="quantidade">Quantidade (t) *</Label>
                   <Input 
@@ -353,7 +356,7 @@ const Liberacoes = () => {
                     step="0.01" 
                     min="0"
                     value={novaLiberacao.quantidade} 
-                    onChange={(e) => setNovaLiberacao((s) => ({ ...s, quantidade: e.target.value }))} 
+                    onChange={e => setNovaLiberacao(s => ({ ...s, quantidade: e.target.value }))} 
                     placeholder="0.00"
                   />
                 </div>
