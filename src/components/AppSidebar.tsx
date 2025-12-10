@@ -60,7 +60,6 @@ const upperMenuItems = [
   },
 ];
 
-// Produtos adicionado acima de Clientes
 const lowerMenuItems = [
   {
     title: "Produtos",
@@ -105,11 +104,17 @@ export function AppSidebar() {
       if ('requiresRole' in item && item.requiresRole) {
         const hasRequiredRole = userRole ? item.requiresRole.includes(userRole) : false;
         if (!hasRequiredRole) {
-          // ocultar por perfil
           return false;
         }
       }
       if (!item.resource) {
+        return true;
+      }
+      // 🚩 CORRIGIDO: admin e logistica SEMPRE podem ver o menu Clientes
+      if (
+        item.resource === "clientes" &&
+        (userRole === "admin" || userRole === "logistica")
+      ) {
         return true;
       }
       const hasAccess = canAccess(item.resource, 'read');
