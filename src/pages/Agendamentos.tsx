@@ -13,7 +13,6 @@ import { Calendar, Clock, User, Truck, Plus, X, Filter as FilterIcon, ChevronDow
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 
-// Utilitários para validação e mascaramento
 function validateAgendamento(ag) {
   const errors = [];
   if (!ag.liberacao) errors.push("Liberação");
@@ -105,6 +104,25 @@ const Agendamentos = () => {
     },
     refetchInterval: 30000,
     enabled: userRole !== "cliente" || !!currentCliente?.id,
+  });
+
+  // CORRIGIDO: query de agendamentos hoje usando data_retirada
+  const hoje = new Date();
+  hoje.setHours(0, 0, 0, 0);
+  const amanha = new Date(hoje);
+  amanha.setDate(hoje.getDate() + 1);
+  const agQueryHoje = useQuery({
+    queryKey: ["agendamentos-hoje", hoje.toISOString().split('T')[0]],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("agendamentos")
+        .select("id")
+        .gte("data_retirada", hoje.toISOString())
+        .lt("data_retirada", amanha.toISOString());
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!user,
   });
 
   const agendamentos = useMemo(() => {
@@ -215,7 +233,6 @@ const Agendamentos = () => {
       const formattedCPF = formatCPF(novoAgendamento.documento);
       const { data: userData } = await supabase.auth.getUser();
 
-      // **IMPORTANTE**: Enviar created_by explícito! (com policy aberta, campo é obrigatório)
       const { data: agendData, error: errAgend } = await supabase
         .from("agendamentos")
         .insert({
@@ -229,7 +246,6 @@ const Agendamentos = () => {
           tipo_caminhao: novoAgendamento.tipoCaminhao || null,
           observacoes: novoAgendamento.observacoes || null,
           status: "confirmado",
-          // User logado (obrigatório c/ not null e policy aberta)
           created_by: userData.user?.id,
         })
         .select(`
