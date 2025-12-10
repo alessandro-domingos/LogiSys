@@ -52,6 +52,32 @@ function formatCpfCnpj(v: string): string {
   }
   return formatCNPJ(onlyDigits);
 }
+function maskCpfCnpjInput(value: string): string {
+  const digits = value.replace(/\D/g, "");
+  if (digits.length <= 11) {
+    // CPF
+    let cpf = digits.slice(0, 11);
+    if (cpf.length > 9)
+      return cpf.replace(/^(\d{3})(\d{3})(\d{3})(\d{0,2})$/, "$1.$2.$3-$4");
+    if (cpf.length > 6)
+      return cpf.replace(/^(\d{3})(\d{3})(\d{0,3})$/, "$1.$2.$3");
+    if (cpf.length > 3)
+      return cpf.replace(/^(\d{3})(\d{0,3})$/, "$1.$2");
+    return cpf;
+  } else {
+    // CNPJ
+    let cnpj = digits.slice(0, 14);
+    if (cnpj.length > 12)
+      return cnpj.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{0,2})$/, "$1.$2.$3/$4-$5");
+    if (cnpj.length > 8)
+      return cnpj.replace(/^(\d{2})(\d{3})(\d{3})(\d{0,4})$/, "$1.$2.$3/$4");
+    if (cnpj.length > 5)
+      return cnpj.replace(/^(\d{2})(\d{3})(\d{0,3})$/, "$1.$2.$3");
+    if (cnpj.length > 2)
+      return cnpj.replace(/^(\d{2})(\d{0,3})$/, "$1.$2");
+    return cnpj;
+  }
+}
 function formatPhone(phone: string): string {
   let cleaned = phone.replace(/\D/g, "");
   if (cleaned.length === 11)
@@ -60,11 +86,31 @@ function formatPhone(phone: string): string {
     return cleaned.replace(/^(\d{2})(\d{4})(\d{4})$/, "($1) $2-$3");
   return phone;
 }
+function maskPhoneInput(value: string): string {
+  const cleaned = value.replace(/\D/g, "").slice(0, 11);
+  if (cleaned.length === 11)
+    return cleaned.replace(/^(\d{2})(\d{5})(\d{4})$/, "($1) $2-$3");
+  if (cleaned.length === 10)
+    return cleaned.replace(/^(\d{2})(\d{4})(\d{4})$/, "($1) $2-$3");
+  if (cleaned.length > 6)
+    return cleaned.replace(/^(\d{2})(\d{0,5})(\d{0,4})$/, "($1) $2-$3");
+  if (cleaned.length > 2)
+    return cleaned.replace(/^(\d{2})(\d{0,5})/, "($1) $2");
+  if (cleaned.length > 0)
+    return cleaned.replace(/^(\d{0,2})/, "($1");
+  return "";
+}
 function formatCEP(cep: string): string {
   const cleaned = cep.replace(/\D/g, "").slice(0, 8);
   if (cleaned.length === 8)
     return cleaned.replace(/^(\d{5})(\d{3})$/, "$1-$2");
   return cep;
+}
+function maskCEPInput(value: string): string {
+  const cleaned = value.replace(/\D/g, "").slice(0, 8);
+  if (cleaned.length > 5)
+    return cleaned.replace(/^(\d{5})(\d{0,3})$/, "$1-$2");
+  return cleaned;
 }
 
 const Clientes = () => {
@@ -72,7 +118,6 @@ const Clientes = () => {
   const { hasRole } = useAuth();
   const { canAccess, loading: permissionsLoading } = usePermissions();
 
-  // 🚩 Só admin ou logistica podem acessar esta página!
   if (!permissionsLoading && !(hasRole("admin") || hasRole("logistica"))) {
     return <Navigate to="/" replace />;
   }
@@ -187,10 +232,10 @@ const Clientes = () => {
         return;
       }
 
-      // 🚩 Salva SEM formatação
-      const cleanCnpjCpf = cnpj_cpf.replace(/\D/g, "");
-      const cleanTelefone = telefone ? telefone.replace(/\D/g, "") : null;
-      const cleanCep = cep ? cep.replace(/\D/g, "") : null;
+      // Salva SEM formatação
+      const cleanCnpjCpf = novoCliente.cnpj_cpf.replace(/\D/g, "");
+      const cleanTelefone = novoCliente.telefone ? novoCliente.telefone.replace(/\D/g, "") : null;
+      const cleanCep = novoCliente.cep ? novoCliente.cep.replace(/\D/g, "") : null;
 
       const response = await fetch(`${supabaseUrl}/functions/v1/create-customer-user`, {
         method: "POST",
@@ -381,7 +426,9 @@ const Clientes = () => {
                       <Input
                         id="cnpj_cpf"
                         value={novoCliente.cnpj_cpf}
-                        onChange={(e) => setNovoCliente({ ...novoCliente, cnpj_cpf: e.target.value })}
+                        onChange={(e) =>
+                          setNovoCliente({ ...novoCliente, cnpj_cpf: maskCpfCnpjInput(e.target.value) })
+                        }
                         placeholder="00.000.000/0000-00 ou 000.000.000-00"
                         maxLength={18}
                       />
@@ -401,7 +448,12 @@ const Clientes = () => {
                       <Input
                         id="telefone"
                         value={novoCliente.telefone}
-                        onChange={(e) => setNovoCliente({ ...novoCliente, telefone: e.target.value })}
+                        onChange={e =>
+                          setNovoCliente({
+                            ...novoCliente,
+                            telefone: maskPhoneInput(e.target.value),
+                          })
+                        }
                         placeholder="(00) 00000-0000"
                         maxLength={15}
                       />
@@ -411,7 +463,9 @@ const Clientes = () => {
                       <Input
                         id="cep"
                         value={novoCliente.cep}
-                        onChange={(e) => setNovoCliente({ ...novoCliente, cep: e.target.value })}
+                        onChange={e =>
+                          setNovoCliente({ ...novoCliente, cep: maskCEPInput(e.target.value) })
+                        }
                         placeholder="00000-000"
                         maxLength={9}
                       />
