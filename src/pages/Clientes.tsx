@@ -20,6 +20,8 @@ import { Users, Plus, Filter as FilterIcon } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
+import { usePermissions } from "@/hooks/usePermissions";
+import { Navigate } from "react-router-dom";
 import type { Database } from "@/integrations/supabase/types";
 
 const estadosBrasil = [
@@ -33,6 +35,21 @@ type Cliente = Database['public']['Tables']['clientes']['Row'];
 const Clientes = () => {
   const { toast } = useToast();
   const { hasRole } = useAuth();
+  const { canAccess, loading: permissionsLoading } = usePermissions();
+
+  // 🔒 ADICIONA GUARD DE PERMISSÃO
+  // Só admin ou logistica podem acessar esta página!
+  if (!permissionsLoading && !(hasRole("admin") || hasRole("logistica"))) {
+    return <Navigate to="/" replace />;
+    // Ou, para mostrar mensagem:
+    // return (
+    //   <div className="flex min-h-screen items-center justify-center">
+    //     <div className="text-center">
+    //       <p className="text-destructive">Você não tem permissão para acessar esta página.</p>
+    //     </div>
+    //   </div>
+    // );
+  }
 
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [loading, setLoading] = useState(true);
@@ -59,7 +76,6 @@ const Clientes = () => {
   });
 
   const [detalhesCliente, setDetalhesCliente] = useState<Cliente | null>(null);
-
   const [filterStatus, setFilterStatus] = useState<"all" | "ativo" | "inativo">("all");
   const [searchTerm, setSearchTerm] = useState("");
 
