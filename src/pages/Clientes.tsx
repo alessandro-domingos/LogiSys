@@ -32,23 +32,49 @@ const estadosBrasil = [
 
 type Cliente = Database['public']['Tables']['clientes']['Row'];
 
+// Helpers de formatação
+const formatCPF = (cpf: string) =>
+  cpf.replace(/\D/g, "")
+    .padStart(11, "0")
+    .slice(0, 11)
+    .replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, "$1.$2.$3-$4");
+
+const formatCNPJ = (cnpj: string) =>
+  cnpj.replace(/\D/g, "")
+    .padStart(14, "0")
+    .slice(0, 14)
+    .replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5");
+
+function formatCpfCnpj(v: string): string {
+  const onlyDigits = v.replace(/\D/g, "");
+  if (onlyDigits.length <= 11) {
+    return formatCPF(onlyDigits);
+  }
+  return formatCNPJ(onlyDigits);
+}
+function formatPhone(phone: string): string {
+  let cleaned = phone.replace(/\D/g, "");
+  if (cleaned.length === 11)
+    return cleaned.replace(/^(\d{2})(\d{5})(\d{4})$/, "($1) $2-$3");
+  if (cleaned.length === 10)
+    return cleaned.replace(/^(\d{2})(\d{4})(\d{4})$/, "($1) $2-$3");
+  return phone;
+}
+function formatCEP(cep: string): string {
+  const cleaned = cep.replace(/\D/g, "").slice(0, 8);
+  if (cleaned.length === 8)
+    return cleaned.replace(/^(\d{5})(\d{3})$/, "$1-$2");
+  return cep;
+}
+
 const Clientes = () => {
   const { toast } = useToast();
   const { hasRole } = useAuth();
   const { canAccess, loading: permissionsLoading } = usePermissions();
 
-  // 🔒 ADICIONA GUARD DE PERMISSÃO
-  // Só admin ou logistica podem acessar esta página!
+  // 🚩 Só admin ou logistica podem acessar esta página!
   if (!permissionsLoading && !(hasRole("admin") || hasRole("logistica"))) {
     return <Navigate to="/" replace />;
-    // Ou, para mostrar mensagem:
-    // return (
-    //   <div className="flex min-h-screen items-center justify-center">
-    //     <div className="text-center">
-    //       <p className="text-destructive">Você não tem permissão para acessar esta página.</p>
-    //     </div>
-    //   </div>
-    // );
   }
 
   const [clientes, setClientes] = useState<Cliente[]>([]);
@@ -161,6 +187,11 @@ const Clientes = () => {
         return;
       }
 
+      // 🚩 Salva SEM formatação
+      const cleanCnpjCpf = cnpj_cpf.replace(/\D/g, "");
+      const cleanTelefone = telefone ? telefone.replace(/\D/g, "") : null;
+      const cleanCep = cep ? cep.replace(/\D/g, "") : null;
+
       const response = await fetch(`${supabaseUrl}/functions/v1/create-customer-user`, {
         method: "POST",
         headers: {
@@ -170,13 +201,13 @@ const Clientes = () => {
         },
         body: JSON.stringify({
           nome: nome.trim(),
-          cnpj_cpf: cnpj_cpf.trim(),
+          cnpj_cpf: cleanCnpjCpf,
           email: email.trim(),
-          telefone: telefone?.trim() || null,
+          telefone: cleanTelefone,
           endereco: endereco?.trim() || null,
           cidade: cidade?.trim() || null,
           estado: estado || null,
-          cep: cep?.trim() || null,
+          cep: cleanCep,
         }),
       });
 
@@ -200,9 +231,9 @@ const Clientes = () => {
               .flat()
               .map(msg =>
                 msg === "Invalid email" ? "Email inválido"
-                : msg === "Required" ? "Campo obrigatório"
-                : msg.includes("at least") ? msg.replace("String must contain at least", "Mínimo de").replace("character(s)", "caracteres")
-                : msg
+                  : msg === "Required" ? "Campo obrigatório"
+                    : msg.includes("at least") ? msg.replace("String must contain at least", "Mínimo de").replace("character(s)", "caracteres")
+                      : msg
               ).join(" | ");
           } else if (typeof data.details === "string") {
             errorMessage = data.details;
@@ -351,7 +382,8 @@ const Clientes = () => {
                         id="cnpj_cpf"
                         value={novoCliente.cnpj_cpf}
                         onChange={(e) => setNovoCliente({ ...novoCliente, cnpj_cpf: e.target.value })}
-                        placeholder="00.000.000/0000-00"
+                        placeholder="00.000.000/0000-00 ou 000.000.000-00"
+                        maxLength={18}
                       />
                     </div>
                     <div>
@@ -371,6 +403,7 @@ const Clientes = () => {
                         value={novoCliente.telefone}
                         onChange={(e) => setNovoCliente({ ...novoCliente, telefone: e.target.value })}
                         placeholder="(00) 00000-0000"
+                        maxLength={15}
                       />
                     </div>
                     <div>
@@ -380,6 +413,7 @@ const Clientes = () => {
                         value={novoCliente.cep}
                         onChange={(e) => setNovoCliente({ ...novoCliente, cep: e.target.value })}
                         placeholder="00000-000"
+                        maxLength={9}
                       />
                     </div>
                     <div className="col-span-2">
@@ -528,12 +562,12 @@ const Clientes = () => {
           </DialogHeader>
           <div className="space-y-2 py-4">
             <p><b>Email:</b> {detalhesCliente?.email}</p>
-            <p><b>Telefone:</b> {detalhesCliente?.telefone || "—"}</p>
-            <p><b>CEP:</b> {detalhesCliente?.cep || "—"}</p>
+            <p><b>Telefone:</b> {detalhesCliente?.telefone ? formatPhone(detalhesCliente.telefone) : "—"}</p>
+            <p><b>CEP:</b> {detalhesCliente?.cep ? formatCEP(detalhesCliente.cep) : "—"}</p>
             <p><b>Endereço:</b> {detalhesCliente?.endereco || "—"}</p>
             <p><b>Cidade:</b> {detalhesCliente?.cidade || "—"}</p>
             <p><b>Estado:</b> {detalhesCliente?.estado || "—"}</p>
-            <p><b>CNPJ/CPF:</b> {detalhesCliente?.cnpj_cpf || "—"}</p>
+            <p><b>CNPJ/CPF:</b> {detalhesCliente?.cnpj_cpf ? formatCpfCnpj(detalhesCliente.cnpj_cpf) : "—"}</p>
             <p><b>Status:</b> {detalhesCliente?.ativo ? "Ativo" : "Inativo"}</p>
           </div>
           <DialogFooter>
@@ -564,8 +598,14 @@ const Clientes = () => {
               </div>
               <div className="space-y-1 text-sm">
                 <p>
-                  <span className="text-muted-foreground">CNPJ/CPF:</span> {cliente.cnpj_cpf}
+                  <span className="text-muted-foreground">CNPJ/CPF:</span> {formatCpfCnpj(cliente.cnpj_cpf)}
                 </p>
+                {(cliente.telefone || cliente.cep) && (
+                  <>
+                    {cliente.telefone && <p><span className="text-muted-foreground">Telefone:</span> {formatPhone(cliente.telefone)}</p>}
+                    {cliente.cep && <p><span className="text-muted-foreground">CEP:</span> {formatCEP(cliente.cep)}</p>}
+                  </>
+                )}
               </div>
               {canCreate && (
                 <div className="flex items-center justify-between pt-3 border-t">
