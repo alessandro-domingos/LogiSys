@@ -184,6 +184,7 @@ const Estoque = () => {
     );
     return Array.from(set).sort();
   }, [estoquePorArmazem]);
+
   const armazensUnicos = useMemo(() => {
     return estoquePorArmazem.map(a => ({
       id: a.id,
@@ -587,12 +588,15 @@ const Estoque = () => {
           <div key={armazem.id}>
             <Card
               className={`w-full transition-all hover:shadow-md cursor-pointer flex flex-col ${openArmazemId === armazem.id ? "border-primary" : ""}`}
-              onClick={() =>
-                setOpenArmazemId(openArmazemId === armazem.id ? null : armazem.id)
-              }
             >
-              <CardContent className="px-5 py-3 flex flex-row items-center">
-                {/* Badge/ícone à ESQUERDA, mesmo padrão agendamentos */}
+              <CardContent
+                className="px-5 py-3 flex flex-row items-center"
+                onClick={() =>
+                  setOpenArmazemId(openArmazemId === armazem.id ? null : armazem.id)
+                }
+                style={{ cursor: "pointer" }}
+              >
+                {/* Ícone à esquerda, padrão agendamentos */}
                 <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-gradient-primary mr-4 shrink-0">
                   <Package className="h-5 w-5 text-white" />
                 </div>
@@ -637,11 +641,26 @@ const Estoque = () => {
                                 value={editQuantity}
                                 onChange={(e) => setEditQuantity(e.target.value)}
                                 className="h-8 w-20"
+                                onClick={e => e.stopPropagation()}
                               />
-                              <Button variant="default" size="sm" onClick={() => handleUpdateQuantity(produto.id, editQuantity)}>
+                              <Button
+                                variant="default"
+                                size="sm"
+                                onClick={e => {
+                                  e.stopPropagation();
+                                  handleUpdateQuantity(produto.id, editQuantity);
+                                }}
+                              >
                                 Salvar
                               </Button>
-                              <Button variant="ghost" size="sm" onClick={() => setEditingId(null)}>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={e => {
+                                  e.stopPropagation();
+                                  setEditingId(null);
+                                }}
+                              >
                                 Cancelar
                               </Button>
                             </div>
@@ -649,7 +668,7 @@ const Estoque = () => {
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={(e) => {
+                              onClick={e => {
                                 e.stopPropagation();
                                 setEditingId(produto.id);
                                 setEditQuantity(produto.quantidade.toString());
