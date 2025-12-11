@@ -582,8 +582,8 @@ const Armazens = () => {
             <DialogTitle>{detalhesArmazem?.nome}</DialogTitle>
           </DialogHeader>
           <div className="space-y-2 py-4">
-            <p><b>Email:</b> {detalhesArmazem?.email}</p>
-            <p><b>Telefone:</b> {detalhesArmazem?.telefone ? formatPhone(detahesArmazem.telefone) : "—"}</p>
+            <p><b>Email:</b> {detalhesArmazem?.email ?? "—"}</p>
+            <p><b>Telefone:</b> {detalhesArmazem?.telefone ? formatPhone(detalhesArmazem.telefone) : "—"}</p>
             <p><b>CEP:</b> {detalhesArmazem?.cep ? formatCEP(detalhesArmazem.cep) : "—"}</p>
             <p><b>Endereço:</b> {detalhesArmazem?.endereco || "—"}</p>
             <p><b>Cidade:</b> {detalhesArmazem?.cidade || "—"}</p>
@@ -620,7 +620,7 @@ const Armazens = () => {
               </div>
               <div className="space-y-1 text-sm">
                 <p>
-                  <span className="text-muted-foreground">Email:</span> {armazem.email}
+                  <span className="text-muted-foreground">Email:</span> {armazem.email ?? "—"}
                 </p>
                 {armazem.telefone && (
                   <p>
