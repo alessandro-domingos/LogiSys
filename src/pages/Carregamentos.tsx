@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -50,14 +51,10 @@ interface SupabaseCarregamentoItem {
 const Carregamentos = () => {
   // Substitua pelo ID dinâmico do usuário logado/cliente/armazém conforme seu contexto
   // para armazém, troque o filtro pelo código ideal do seu RBAC
-  
+
   const { data: carregamentosData, isLoading, error } = useQuery({
     queryKey: ["carregamentos"],
     queryFn: async () => {
-      // Aqui use o filtro correto (WHERE) conforme quem está logado [armazém ou cliente]
-      // Exemplo para cliente_id = "usuario-logado-id" (troque conforme necessário)
-      // Pode ajustar a query para armazém conforme o relacionamento real em seu sistema!
-
       const { data, error } = await supabase
         .from("carregamentos")
         .select(`
@@ -84,9 +81,9 @@ const Carregamentos = () => {
           )
         `)
         // Adapte: filtro por armazém (precisa saber como o armazém está relacionado ao agendamento)
-        //.eq('agendamento.armazem_id', <ID_ARMAZEM>)
+        // .eq('agendamento.armazem_id', <ID_ARMAZEM>)
         // Exemplo para cliente:
-        //.eq('agendamento.cliente_id', <ID_CLIENTE>)
+        // .eq('agendamento.cliente_id', <ID_CLIENTE>)
         .order("data_chegada", { ascending: false });
       if (error) {
         console.error("[ERROR] Erro ao buscar carregamentos:", error);
@@ -284,35 +281,37 @@ const Carregamentos = () => {
       <div className="container mx-auto px-6 py-6">
         <div className="grid gap-4">
           {filteredCarregamentos.map((carr) => (
-            <Card key={carr.id} className="transition-all hover:shadow-md">
-              <CardContent className="p-5">
-                <div className="space-y-4">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-start gap-4">
-                      <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-warning">
-                        <Truck className="h-5 w-5 text-white" />
+            <Link key={carr.id} href={`/Carregamentos/${carr.id}`}>
+              <Card className="transition-all hover:shadow-md cursor-pointer">
+                <CardContent className="p-5">
+                  <div className="space-y-4">
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-start gap-4">
+                        <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-warning">
+                          <Truck className="h-5 w-5 text-white" />
+                        </div>
+                        <div>
+                          <h3 className="font-semibold text-foreground">{carr.cliente}</h3>
+                          <p className="text-sm text-muted-foreground">{carr.quantidade} toneladas</p>
+                          <p className="text-xs text-muted-foreground">{carr.data_retirada} • {carr.horario}</p>
+                          <p className="text-xs text-muted-foreground">Placa: <span className="font-medium">{carr.placa}</span></p>
+                          <p className="text-xs text-muted-foreground">Motorista: <span className="font-medium">{carr.motorista}</span></p>
+                          {carr.numero_nf && (
+                            <p className="text-xs text-muted-foreground">Nº NF: <span className="font-medium">{carr.numero_nf}</span></p>
+                          )}
+                        </div>
                       </div>
-                      <div>
-                        <h3 className="font-semibold text-foreground">{carr.cliente}</h3>
-                        <p className="text-sm text-muted-foreground">{carr.quantidade} toneladas</p>
-                        <p className="text-xs text-muted-foreground">{carr.data_retirada} • {carr.horario}</p>
-                        <p className="text-xs text-muted-foreground">Placa: <span className="font-medium">{carr.placa}</span></p>
-                        <p className="text-xs text-muted-foreground">Motorista: <span className="font-medium">{carr.motorista}</span></p>
-                        {carr.numero_nf && (
-                          <p className="text-xs text-muted-foreground">Nº NF: <span className="font-medium">{carr.numero_nf}</span></p>
-                        )}
+                      <div className="flex flex-col items-end gap-2">
+                        <Badge variant={getStatusBadgeVariant(carr.status)}>
+                          {getStatusLabel(carr.status)}
+                        </Badge>
+                        <div className="text-xs text-muted-foreground">Fotos: <span className="font-semibold">{carr.fotosTotal}</span></div>
                       </div>
-                    </div>
-                    <div className="flex flex-col items-end gap-2">
-                      <Badge variant={getStatusBadgeVariant(carr.status)}>
-                        {getStatusLabel(carr.status)}
-                      </Badge>
-                      <div className="text-xs text-muted-foreground">Fotos: <span className="font-semibold">{carr.fotosTotal}</span></div>
                     </div>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            </Link>
           ))}
           {filteredCarregamentos.length === 0 && (
             <div className="text-sm text-muted-foreground py-8 text-center">
