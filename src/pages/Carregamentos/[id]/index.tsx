@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { UploadCloud, CheckCircle, Loader2 } from "lucide-react";
+import { UploadCloud, CheckCircle, Loader2, FileText } from "lucide-react";
 
 const ETAPAS = [
   { id: 1, nome: "Chegada" },
@@ -35,12 +35,17 @@ const CarregamentoDetalhe = () => {
   const [foto, setFoto] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
 
-  // Buscar detalhes do carregamento + agendamento + etapas + fotos
+  // Estados para NF/XML (etapa 5)
+  const [nfFile, setNfFile] = useState<File | null>(null);
+  const [xmlFile, setXmlFile] = useState<File | null>(null);
+  const [uploadingNF, setUploadingNF] = useState(false);
+  const [uploadingXML, setUploadingXML] = useState(false);
+
+  // Buscar detalhes do carregamento + agendamento + etapas + fotos + documentos
   const { data: carregamento, isLoading, error, refetch } = useQuery({
     queryKey: ["carregamento-detalhe", id],
     enabled: !!id,
     queryFn: async () => {
-      // Adapte os nomes de joins se necessário conforme o seu banco!
       const { data, error } = await supabase
         .from("carregamentos")
         .select(`
@@ -57,7 +62,8 @@ const CarregamentoDetalhe = () => {
             )
           ),
           etapas:etapas_carregamento(id, etapa, nome_etapa, inicio, fim, observacao, created_at),
-          fotos:fotos_carregamento(id, etapa, url, legenda, created_at)
+          fotos:fotos_carregamento(id, etapa, url, legenda, created_at),
+          documentos:documentos_carregamento(id, tipo, url, created_at)
         `)
         .eq("id", id)
         .single();
@@ -82,6 +88,16 @@ const CarregamentoDetalhe = () => {
     return map;
   }, [carregamento?.fotos]);
 
+  // Filtra documentos anexados
+  const documentosPorTipo = useMemo(() => {
+    if (!carregamento?.documentos) return {};
+    const map: Record<string, any> = {};
+    for (const d of carregamento.documentos) {
+      map[d.tipo] = d;
+    }
+    return map;
+  }, [carregamento?.documentos]);
+
   // Observação da etapa atual
   const etapaObservacoes: Record<number, string> = {
     1: carregamento?.observacao_chegada ?? "",
@@ -100,12 +116,11 @@ const CarregamentoDetalhe = () => {
     5: carregamento?.data_nf,
   };
 
-  // Upload de foto
+  // Upload de foto (para etapas 1-4)
   const handleFotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) setFoto(e.target.files[0]);
   };
 
-  // Salvar foto
   const uploadFotoMutation = useMutation({
     mutationFn: async () => {
       if (!foto) throw new Error("Selecione uma foto");
@@ -135,6 +150,74 @@ const CarregamentoDetalhe = () => {
       queryClient.invalidateQueries(["carregamento-detalhe", id]);
     },
     onError: () => setUploading(false),
+  });
+
+  // Funções para NF e XML (etapa 5)
+  const handleNfChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) setNfFile(e.target.files[0]);
+  };
+  const handleXmlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) setXmlFile(e.target.files[0]);
+  };
+
+  // Upload NF
+  const uploadNfMutation = useMutation({
+    mutationFn: async () => {
+      if (!nfFile) throw new Error("Selecione a NF (PDF)");
+      setUploadingNF(true);
+      const filePath = `carregamentos/${id}/nf_${Date.now()}_${nfFile.name}`;
+      const { error: uploadError } = await supabase.storage
+        .from("carregamento-documentos")
+        .upload(filePath, nfFile);
+      if (uploadError) throw uploadError;
+
+      // Insere registro
+      const { error: insertError } = await supabase
+        .from("documentos_carregamento")
+        .insert([{
+          carregamento_id: id,
+          tipo: "nf",
+          url: filePath,
+        }]);
+      if (insertError) throw insertError;
+      setNfFile(null);
+      setUploadingNF(false);
+      return true;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries(["carregamento-detalhe", id]);
+    },
+    onError: () => setUploadingNF(false),
+  });
+
+  // Upload XML
+  const uploadXmlMutation = useMutation({
+    mutationFn: async () => {
+      if (!xmlFile) throw new Error("Selecione o arquivo XML");
+      setUploadingXML(true);
+      const filePath = `carregamentos/${id}/xml_${Date.now()}_${xmlFile.name}`;
+      const { error: uploadError } = await supabase.storage
+        .from("carregamento-documentos")
+        .upload(filePath, xmlFile);
+      if (uploadError) throw uploadError;
+
+      // Insere registro
+      const { error: insertError } = await supabase
+        .from("documentos_carregamento")
+        .insert([{
+          carregamento_id: id,
+          tipo: "xml",
+          url: filePath,
+        }]);
+      if (insertError) throw insertError;
+      setXmlFile(null);
+      setUploadingXML(false);
+      return true;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries(["carregamento-detalhe", id]);
+    },
+    onError: () => setUploadingXML(false),
   });
 
   // Atualizar observação da etapa (campo)
@@ -167,7 +250,6 @@ const CarregamentoDetalhe = () => {
   // Calcular estatísticas de tempo
   const tempoEtapas = useMemo(() => {
     const result: Record<number, string> = {};
-    // Para cada etapa, calcula quanto tempo até a próxima (ou agora)
     for (let i = 1; i <= 5; i++) {
       const ini = dataEtapas[i];
       const fim = i < 5 ? dataEtapas[i + 1] : carregamento?.updated_at;
@@ -175,7 +257,6 @@ const CarregamentoDetalhe = () => {
       const dtIni = new Date(ini).getTime();
       const dtFim = fim ? new Date(fim).getTime() : Date.now();
       const duracao = dtFim - dtIni;
-      // Exemplo formatado: "2h 15m"
       if (duracao > 0) {
         const min = Math.floor(duracao / 60000) % 60;
         const hrs = Math.floor(duracao / 3600000);
@@ -187,7 +268,14 @@ const CarregamentoDetalhe = () => {
 
   // Permissões
   const etapaFinalizada = etapaAtual > ETAPAS.length;
-  const bloqueado = uploading || etapaFinalizada || carregamento?.status === "finalizado";
+  const bloqueado = uploading || uploadingNF || uploadingXML || etapaFinalizada || carregamento?.status === "finalizado";
+
+  // Se está na última etapa, arquivos obrigatórios são PDF (NF) e XML
+  const isUltimaEtapa = etapaAtual === 5;
+
+  // Checagem: NF e XML já anexados?
+  const nfEnviada = Boolean(documentosPorTipo["nf"]);
+  const xmlEnviado = Boolean(documentosPorTipo["xml"]);
 
   // Renderização
   if (isLoading || !carregamento) {
@@ -229,7 +317,6 @@ const CarregamentoDetalhe = () => {
                 </div>
                 <span className={`text-xs font-semibold ${etapaAtual === etapa.id ? "text-primary" : ""}`}>{etapa.nome}</span>
                 <span className="text-[10px] text-muted-foreground">{formatarDataHora(dataEtapas[etapa.id])}</span>
-                {/* Exibe tempo gasto na etapa */}
                 {tempoEtapas[etapa.id] && <span className="text-xs">{tempoEtapas[etapa.id]}</span>}
               </div>
             ))}
@@ -237,7 +324,7 @@ const CarregamentoDetalhe = () => {
         </div>
       </div>
 
-      {/* Etapa atual: upload, obs, próxima etapa */}
+      {/* Etapa atual */}
       {!etapaFinalizada && (
         <div className="container mx-auto px-6 mt-8">
           <Card>
@@ -247,25 +334,80 @@ const CarregamentoDetalhe = () => {
                   <Badge variant="default">Etapa atual:&nbsp; {ETAPAS.find((e) => e.id === etapaAtual)?.nome || "Desconhecida"}</Badge>
                 </div>
 
-                {/* Foto obrigatória da etapa - ou documento se for finalização */}
-                <Label className="font-medium">Subir foto{etapaAtual === 5 ? ' / NF/Doc.' : ''} (obrigatório)</Label>
-                <div className="flex gap-2 items-center">
-                  <Input type="file" accept="image/*" disabled={bloqueado} onChange={handleFotoChange} />
-                  <Button
-                    variant="default"
-                    size="sm"
-                    disabled={bloqueado || !foto}
-                    onClick={() => uploadFotoMutation.mutate()}
-                  >
-                    {uploading ? <Loader2 className="animate-spin h-4 w-4" /> : <UploadCloud className="h-4 w-4" />}
-                    &nbsp; Anexar
-                  </Button>
-                  {foto && <span className="text-xs text-muted-foreground">{foto.name}</span>}
-                </div>
-                {/* Visualização da foto já enviada */}
-                {fotosPorEtapa[etapaAtual] && fotosPorEtapa[etapaAtual].map((f) => (
-                  <img key={f.id} src={supabase.storage.from("carregamento-fotos").getPublicUrl(f.url).data.publicUrl} alt="" className="h-20 rounded mt-2 cursor-pointer" />
-                ))}
+                {/* Upload obrigatório */}
+                {!isUltimaEtapa ? (
+                  <>
+                    <Label className="font-medium">Subir foto da etapa (obrigatório)</Label>
+                    <div className="flex gap-2 items-center">
+                      <Input type="file" accept="image/*" disabled={bloqueado} onChange={handleFotoChange} />
+                      <Button
+                        variant="default"
+                        size="sm"
+                        disabled={bloqueado || !foto}
+                        onClick={() => uploadFotoMutation.mutate()}
+                      >
+                        {uploading ? <Loader2 className="animate-spin h-4 w-4" /> : <UploadCloud className="h-4 w-4" />}
+                        &nbsp; Anexar
+                      </Button>
+                      {foto && <span className="text-xs text-muted-foreground">{foto.name}</span>}
+                    </div>
+                    {fotosPorEtapa[etapaAtual] && fotosPorEtapa[etapaAtual].map((f) => (
+                      <img key={f.id} src={supabase.storage.from("carregamento-fotos").getPublicUrl(f.url).data.publicUrl} alt="" className="h-20 rounded mt-2 cursor-pointer" />
+                    ))}
+                  </>
+                ) : (
+                  <>
+                    {/* Última etapa: NF (PDF) e XML */}
+                    <Label className="font-medium">Upload Nota Fiscal (PDF) *</Label>
+                    {!nfEnviada ? (
+                      <div className="flex gap-2 items-center mb-2">
+                        <Input type="file" accept="application/pdf" disabled={bloqueado} onChange={handleNfChange} />
+                        <Button
+                          variant="default"
+                          size="sm"
+                          disabled={bloqueado || !nfFile}
+                          onClick={() => uploadNfMutation.mutate()}
+                        >
+                          {uploadingNF ? <Loader2 className="animate-spin h-4 w-4" /> : <UploadCloud className="h-4 w-4" />}
+                          &nbsp; Anexar NF
+                        </Button>
+                        {nfFile && <span className="text-xs text-muted-foreground">{nfFile.name}</span>}
+                      </div>
+                    ) : (
+                      <a
+                        href={supabase.storage.from("carregamento-documentos").getPublicUrl(documentosPorTipo["nf"].url).data.publicUrl}
+                        target="_blank" rel="noopener noreferrer"
+                        className="flex items-center gap-2 text-primary underline"
+                      >
+                        <FileText className="h-4 w-4" /> Visualizar NF anexada
+                      </a>
+                    )}
+                    <Label className="font-medium">Upload Arquivo XML *</Label>
+                    {!xmlEnviado ? (
+                      <div className="flex gap-2 items-center mb-2">
+                        <Input type="file" accept=".xml,application/xml,text/xml" disabled={bloqueado} onChange={handleXmlChange} />
+                        <Button
+                          variant="default"
+                          size="sm"
+                          disabled={bloqueado || !xmlFile}
+                          onClick={() => uploadXmlMutation.mutate()}
+                        >
+                          {uploadingXML ? <Loader2 className="animate-spin h-4 w-4" /> : <UploadCloud className="h-4 w-4" />}
+                          &nbsp; Anexar XML
+                        </Button>
+                        {xmlFile && <span className="text-xs text-muted-foreground">{xmlFile.name}</span>}
+                      </div>
+                    ) : (
+                      <a
+                        href={supabase.storage.from("carregamento-documentos").getPublicUrl(documentosPorTipo["xml"].url).data.publicUrl}
+                        target="_blank" rel="noopener noreferrer"
+                        className="flex items-center gap-2 text-green-700 underline"
+                      >
+                        <FileText className="h-4 w-4" /> Visualizar XML anexado
+                      </a>
+                    )}
+                  </>
+                )}
 
                 {/* Observação da etapa */}
                 <div className="space-y-1">
@@ -277,11 +419,18 @@ const CarregamentoDetalhe = () => {
                   />
                   {!bloqueado && <Button size="sm" className="mt-1" onClick={handleObsSave}>Salvar Observação</Button>}
                 </div>
-                {/* Botão para avançar etapa: só habilitado se já houver foto */}
+
+                {/* Botão para avançar etapa:
+                    - Etapas 1-4: liberado se já anexou foto
+                    - Etapa 5: liberado só se NF e XML anexados
+                */}
                 <Button
                   size="lg"
                   className="mt-2"
-                  disabled={bloqueado || !(fotosPorEtapa[etapaAtual]?.length > 0)}
+                  disabled={bloqueado ||
+                    (!isUltimaEtapa && !(fotosPorEtapa[etapaAtual]?.length > 0)) ||
+                    (isUltimaEtapa && !(nfEnviada && xmlEnviado))
+                  }
                   onClick={avancarEtapa}
                 >
                   Próxima etapa
@@ -292,12 +441,12 @@ const CarregamentoDetalhe = () => {
         </div>
       )}
 
-      {/* Depois de finalizado, mostra todas as fotos, observações e estatísticas */}
+      {/* Depois de finalizado, mostra todas as fotos, documentos e estatísticas */}
       {etapaFinalizada && (
         <div className="container mx-auto px-6 mt-8">
           <Card>
             <CardContent className="p-6">
-              <div className="text-green-600 font-bold flex items-center gap-1">
+              <div className="text-green-600 font-bold flex items-center gap-1 mb-2">
                 <CheckCircle className="h-5 w-5" /> Carregamento finalizado!
               </div>
               <div className="flex flex-wrap gap-4 mt-4">
@@ -312,6 +461,29 @@ const CarregamentoDetalhe = () => {
                       {(fotosPorEtapa[etapa.id] || []).map((f) => (
                         <img key={f.id} src={supabase.storage.from("carregamento-fotos").getPublicUrl(f.url).data.publicUrl} alt="" className="h-16 rounded" />
                       ))}
+                      {/* Etapa 5: mostra NF/XML anexados */}
+                      {etapa.id === 5 && (
+                        <>
+                          {documentosPorTipo["nf"] && (
+                            <a
+                              href={supabase.storage.from("carregamento-documentos").getPublicUrl(documentosPorTipo["nf"].url).data.publicUrl}
+                              target="_blank" rel="noopener noreferrer"
+                              className="flex items-center gap-1 text-primary underline"
+                            >
+                              <FileText className="h-4 w-4" /> NF anexada
+                            </a>
+                          )}
+                          {documentosPorTipo["xml"] && (
+                            <a
+                              href={supabase.storage.from("carregamento-documentos").getPublicUrl(documentosPorTipo["xml"].url).data.publicUrl}
+                              target="_blank" rel="noopener noreferrer"
+                              className="flex items-center gap-1 text-green-700 underline"
+                            >
+                              <FileText className="h-4 w-4" /> XML anexado
+                            </a>
+                          )}
+                        </>
+                      )}
                     </div>
                   </div>
                 ))}
