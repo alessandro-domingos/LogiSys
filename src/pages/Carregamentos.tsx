@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -24,6 +24,8 @@ interface CarregamentoItem {
   etapa_atual: number;
   fotosTotal: number;
   numero_nf: string | null;
+  cliente_id: string | null;
+  armazem_id: string | null;
 }
 
 interface SupabaseCarregamentoItem {
@@ -33,6 +35,8 @@ interface SupabaseCarregamentoItem {
   numero_nf: string | null;
   data_chegada: string | null;
   created_at: string | null;
+  cliente_id: string | null;
+  armazem_id: string | null;
   agendamento: {
     id: string;
     data_retirada: string;
@@ -48,9 +52,9 @@ interface SupabaseCarregamentoItem {
   fotos: { id: string }[];
 }
 
-// Opcional: array de etapas para exibir labels da etapa_atual
+// Array de etapas
 const ETAPAS = [
-  { id: 0, nome: "Aguardando início" }, // novo início padrão
+  { id: 0, nome: "Aguardando início" },
   { id: 1, nome: "Chegada" },
   { id: 2, nome: "Início Carregamento" },
   { id: 3, nome: "Carregando" },
@@ -59,6 +63,46 @@ const ETAPAS = [
 ];
 
 const Carregamentos = () => {
+  // Usuário atual & roles
+  const [userId, setUserId] = useState<string | null>(null);
+  const [roles, setRoles] = useState<string[]>([]);
+  const [armazemId, setArmazemId] = useState<string | null>(null);
+  const [clienteId, setClienteId] = useState<string | null>(null);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      setUserId(data.user?.id ?? null);
+    });
+    // Busca roles do usuário
+    const fetchRoles = async () => {
+      if (!userId) return;
+      const { data, error } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", userId);
+      if (data) setRoles(data.map((r) => r.role));
+    };
+    // Busca id(s) de armazém e cliente relacionado ao user (caso queira restringir apenas para estes)
+    const fetchVinculos = async () => {
+      if (!userId) return;
+      const { data: armazem } = await supabase
+        .from("armazens")
+        .select("id")
+        .eq("user_id", userId)
+        .single();
+      setArmazemId(armazem?.id ?? null);
+      const { data: cliente } = await supabase
+        .from("clientes")
+        .select("id")
+        .eq("user_id", userId)
+        .single();
+      setClienteId(cliente?.id ?? null);
+    };
+    fetchRoles();
+    fetchVinculos();
+    // eslint-disable-next-line
+  }, [userId]);
+
   const { data: carregamentosData, isLoading, error } = useQuery({
     queryKey: ["carregamentos"],
     queryFn: async () => {
@@ -71,6 +115,8 @@ const Carregamentos = () => {
           numero_nf,
           data_chegada,
           created_at,
+          cliente_id,
+          armazem_id,
           agendamento:agendamentos!carregamentos_agendamento_id_fkey (
             id,
             data_retirada,
@@ -97,7 +143,7 @@ const Carregamentos = () => {
     refetchInterval: 30000,
   });
 
-  const carregamentos = useMemo(() => {
+  const carregamentos = useMemo<CarregamentoItem[]>(() => {
     if (!carregamentosData) return [];
     return carregamentosData.map((item: SupabaseCarregamentoItem) => {
       const agendamento = item.agendamento;
@@ -110,10 +156,12 @@ const Carregamentos = () => {
         data_retirada: agendamento?.data_retirada || "N/A",
         horario: agendamento?.horario || "00:00",
         status: (item.status as StatusCarregamento) || "aguardando",
-        etapa_atual: item.etapa_atual ?? 0, // <-- corrigido: mantém etapa 0 caso venha do backend
+        etapa_atual: item.etapa_atual ?? 0,
         fotosTotal: item.fotos ? item.fotos.length : 0,
         numero_nf: item.numero_nf || null,
-      } as CarregamentoItem;
+        cliente_id: item.cliente_id ?? null,
+        armazem_id: item.armazem_id ?? null,
+      };
     });
   }, [carregamentosData]);
 
@@ -135,8 +183,25 @@ const Carregamentos = () => {
     setDateTo("");
   };
 
+  // Só "enxerga" carregamento se for admin/logistica OU do armazem OU do cliente relacionado
+  const permittedCarregamentos = useMemo(() => {
+    if (!userId || !roles.length) return [];
+    // Admin/logística enxergam tudo
+    if (roles.includes('admin') || roles.includes('logistica')) return carregamentos;
+    // Armazém responsável – só vê os seus
+    if (roles.includes('armazem') && armazemId) {
+      return carregamentos.filter(c => c.armazem_id === armazemId);
+    }
+    // Cliente responsável – só vê os seus
+    if (roles.includes('cliente') && clienteId) {
+      return carregamentos.filter(c => c.cliente_id === clienteId);
+    }
+    // Nenhum outro vínculo
+    return [];
+  }, [userId, roles, carregamentos, armazemId, clienteId]);
+
   const filteredCarregamentos = useMemo(() => {
-    return carregamentos.filter((c) => {
+    return permittedCarregamentos.filter((c) => {
       const term = search.trim().toLowerCase();
       if (term) {
         const hay = `${c.cliente} ${c.motorista} ${c.placa}`.toLowerCase();
@@ -154,10 +219,10 @@ const Carregamentos = () => {
       }
       return true;
     });
-  }, [carregamentos, search, selectedStatuses, dateFrom, dateTo]);
+  }, [permittedCarregamentos, search, selectedStatuses, dateFrom, dateTo]);
 
   const showingCount = filteredCarregamentos.length;
-  const totalCount = carregamentos.length;
+  const totalCount = permittedCarregamentos.length;
   const activeAdvancedCount =
     (selectedStatuses.length ? 1 : 0) + ((dateFrom || dateTo) ? 1 : 0);
 
@@ -181,14 +246,13 @@ const Carregamentos = () => {
     }
   };
 
-  // Novo: retorna o nome da etapa (para exibir se desejar)
   const getEtapaLabel = (etapa_atual: number) => {
     const found = ETAPAS.find(e => e.id === etapa_atual);
     return found ? found.nome : `Etapa ${etapa_atual}`;
   };
 
   // Loading
-  if (isLoading) {
+  if (isLoading || userId == null || roles.length === 0) {
     return (
       <div className="min-h-screen bg-background">
         <PageHeader
@@ -307,7 +371,6 @@ const Carregamentos = () => {
                           {carr.numero_nf && (
                             <p className="text-xs text-muted-foreground">Nº NF: <span className="font-medium">{carr.numero_nf}</span></p>
                           )}
-                          {/* Exibe label da etapa atual, se desejar */}
                           <p className="text-xs text-muted-foreground mt-1">Etapa: <span className="font-medium">{getEtapaLabel(carr.etapa_atual)}</span></p>
                         </div>
                       </div>
