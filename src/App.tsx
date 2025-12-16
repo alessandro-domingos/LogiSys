@@ -11,12 +11,11 @@ import Estoque from "./pages/Estoque";
 import Liberacoes from "./pages/Liberacoes";
 import Agendamentos from "./pages/Agendamentos";
 import Carregamentos from "./pages/Carregamentos";
-
+import CarregamentoDetalhe from "./pages/CarregamentoDetalhe";
 import Produtos from "./pages/Produtos";
 import Armazens from "./pages/Armazens";
 import Clientes from "./pages/Clientes";
 import Colaboradores from "./pages/Colaboradores";
-import Produtos from "./pages/Produtos";
 import AuthPage from "./pages/AuthPage";
 import ChangePassword from "./pages/ChangePassword";
 import ForgotPassword from "./pages/ForgotPassword";
@@ -25,17 +24,17 @@ import type { Resource } from "./hooks/usePermissions";
 
 const queryClient = new QueryClient();
 
-const ProtectedRoute = ({ 
-  children, 
-  resource 
-}: { 
+const ProtectedRoute = ({
+  children,
+  resource
+}: {
   children: React.ReactNode;
   resource?: Resource;
 }) => {
   const { user, loading: authLoading, needsPasswordChange, recoveryMode } = useAuth();
   const { canAccess, loading: permLoading } = usePermissions();
   const location = useLocation();
-  
+
   if (authLoading || permLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -46,7 +45,7 @@ const ProtectedRoute = ({
       </div>
     );
   }
-  
+
   if (!user) {
     return <Navigate to="/auth" replace />;
   }
@@ -60,7 +59,7 @@ const ProtectedRoute = ({
   if (resource && !canAccess(resource, 'read')) {
     return <Navigate to="/" replace />;
   }
-  
+
   return <>{children}</>;
 };
 
@@ -133,6 +132,16 @@ const App = () => (
               }
             />
             <Route
+              path="/carregamentos/:id"
+              element={
+                <ProtectedRoute resource="carregamentos">
+                  <Layout>
+                    <CarregamentoDetalhe />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/produtos"
               element={
                 <ProtectedRoute resource="produtos">
@@ -182,7 +191,6 @@ const App = () => (
                 </ProtectedRoute>
               }
             />
-
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
