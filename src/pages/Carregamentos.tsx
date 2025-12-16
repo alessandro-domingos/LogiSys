@@ -48,6 +48,16 @@ interface SupabaseCarregamentoItem {
   fotos: { id: string }[];
 }
 
+// Opcional: array de etapas para exibir labels da etapa_atual
+const ETAPAS = [
+  { id: 0, nome: "Aguardando início" }, // novo início padrão
+  { id: 1, nome: "Chegada" },
+  { id: 2, nome: "Início Carregamento" },
+  { id: 3, nome: "Carregando" },
+  { id: 4, nome: "Finalização Processual" },
+  { id: 5, nome: "Finalização Fiscal" }
+];
+
 const Carregamentos = () => {
   const { data: carregamentosData, isLoading, error } = useQuery({
     queryKey: ["carregamentos"],
@@ -100,7 +110,7 @@ const Carregamentos = () => {
         data_retirada: agendamento?.data_retirada || "N/A",
         horario: agendamento?.horario || "00:00",
         status: (item.status as StatusCarregamento) || "aguardando",
-        etapa_atual: item.etapa_atual || 1,
+        etapa_atual: item.etapa_atual ?? 0, // <-- corrigido: mantém etapa 0 caso venha do backend
         fotosTotal: item.fotos ? item.fotos.length : 0,
         numero_nf: item.numero_nf || null,
       } as CarregamentoItem;
@@ -169,6 +179,12 @@ const Carregamentos = () => {
       case "cancelado": return "Cancelado";
       default: return status;
     }
+  };
+
+  // Novo: retorna o nome da etapa (para exibir se desejar)
+  const getEtapaLabel = (etapa_atual: number) => {
+    const found = ETAPAS.find(e => e.id === etapa_atual);
+    return found ? found.nome : `Etapa ${etapa_atual}`;
   };
 
   // Loading
@@ -291,6 +307,8 @@ const Carregamentos = () => {
                           {carr.numero_nf && (
                             <p className="text-xs text-muted-foreground">Nº NF: <span className="font-medium">{carr.numero_nf}</span></p>
                           )}
+                          {/* Exibe label da etapa atual, se desejar */}
+                          <p className="text-xs text-muted-foreground mt-1">Etapa: <span className="font-medium">{getEtapaLabel(carr.etapa_atual)}</span></p>
                         </div>
                       </div>
                       <div className="flex flex-col items-end gap-2">
