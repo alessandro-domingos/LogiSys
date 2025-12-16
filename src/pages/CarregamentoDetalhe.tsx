@@ -11,6 +11,7 @@ import { UploadCloud, CheckCircle, Loader2, FileText } from "lucide-react";
 import { useParams } from "react-router-dom";
 
 const ETAPAS = [
+  { id: 0, nome: "Aguardando início" },   // Agora começa do zero!
   { id: 1, nome: "Chegada" },
   { id: 2, nome: "Início Carregamento" },
   { id: 3, nome: "Carregando" },
@@ -72,15 +73,21 @@ const CarregamentoDetalhe = () => {
     refetchOnWindowFocus: true,
   });
 
-  // Controlar etapa atual
-  const etapaAtual = carregamento?.etapa_atual || 1;
+  // Controlar etapa atual (agora começa em 0!)
+  const etapaAtual = carregamento?.etapa_atual ?? 0;
 
-  // Filtrar infos
+  // Ajusta controles de etapas conforme novo modelo
+  const etapaFinalizada = etapaAtual > 5; // 5 = última etapa
+
+  // Helper para mostrar etapa corrente (após conclusão da etapa info, usuário está na próxima do array)
+  const etapaInfo = ETAPAS.find(e => e.id === etapaAtual);
+
+  // Filtrar infos de fotos/por etapa
   const fotosPorEtapa = useMemo(() => {
     if (!carregamento?.fotos) return {};
     const map: Record<number, any[]> = {};
     for (const f of carregamento.fotos) {
-      if (!f.etapa) continue;
+      if (typeof f.etapa !== "number") continue;
       if (!map[f.etapa]) map[f.etapa] = [];
       map[f.etapa].push(f);
     }
@@ -97,8 +104,9 @@ const CarregamentoDetalhe = () => {
     return map;
   }, [carregamento?.documentos]);
 
-  // Observação da etapa atual
+  // Observação da etapa atual (etapa 0 não tem observação)
   const etapaObservacoes: Record<number, string> = {
+    0: "", // etapa 0 não define observação, a menos que deseje customizar
     1: carregamento?.observacao_chegada ?? "",
     2: carregamento?.observacao_inicio ?? "",
     3: carregamento?.observacao_carregando ?? "",
@@ -108,6 +116,7 @@ const CarregamentoDetalhe = () => {
 
   // Datas de início de cada etapa
   const dataEtapas: Record<number, string | null | undefined> = {
+    0: carregamento?.created_at, // ou null, se quiser não exibir para etapa 0
     1: carregamento?.data_chegada,
     2: carregamento?.data_inicio_carregamento,
     3: carregamento?.data_carregando,
@@ -115,7 +124,7 @@ const CarregamentoDetalhe = () => {
     5: carregamento?.data_nf,
   };
 
-  // Upload de foto (para etapas 1-4)
+  // Upload de foto (para etapas 1-4; etapa 0 não sobe foto)
   const handleFotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) setFoto(e.target.files[0]);
   };
@@ -218,9 +227,9 @@ const CarregamentoDetalhe = () => {
     onError: () => setUploadingXML(false),
   });
 
-  // Atualizar observação da etapa (campo)
+  // Atualizar observação da etapa (não há para etapa 0)
   const handleObsSave = async () => {
-    let col: string;
+    let col: string | null = null;
     switch (etapaAtual) {
       case 1: col = "observacao_chegada"; break;
       case 2: col = "observacao_inicio"; break;
@@ -229,14 +238,16 @@ const CarregamentoDetalhe = () => {
       case 5: col = "observacao_nf"; break;
       default: return;
     }
+    if (!col) return;
     const { error } = await supabase
       .from("carregamentos")
       .update({ [col]: obs })
       .eq("id", id);
+
     if (!error) refetch();
   };
 
-  // Avançar para próxima etapa
+  // Avançar para próxima etapa — agora também aceita etapa 0 => 1
   const avancarEtapa = async () => {
     const { error } = await supabase
       .from("carregamentos")
@@ -265,7 +276,6 @@ const CarregamentoDetalhe = () => {
   }, [dataEtapas, carregamento?.updated_at]);
 
   // Permissões
-  const etapaFinalizada = etapaAtual > ETAPAS.length;
   const bloqueado = uploading || uploadingNF || uploadingXML || etapaFinalizada || carregamento?.status === "finalizado";
 
   // Se está na última etapa, arquivos obrigatórios são PDF (NF) e XML
@@ -329,11 +339,11 @@ const CarregamentoDetalhe = () => {
             <CardContent className="p-6">
               <div className="flex flex-col gap-4">
                 <div className="flex items-center gap-2">
-                  <Badge variant="default">Etapa atual:&nbsp; {ETAPAS.find((e) => e.id === etapaAtual)?.nome || "Desconhecida"}</Badge>
+                  <Badge variant="default">Etapa atual:&nbsp; {etapaInfo?.nome || "Desconhecida"}</Badge>
                 </div>
 
-                {/* Upload obrigatório */}
-                {!isUltimaEtapa ? (
+                {/* Upload obrigatório apenas se etapaAtual >=1 e <5 */}
+                {etapaAtual >= 1 && etapaAtual < 5 && (
                   <>
                     <Label className="font-medium">Subir foto da etapa (obrigatório)</Label>
                     <div className="flex gap-2 items-center">
@@ -353,9 +363,10 @@ const CarregamentoDetalhe = () => {
                       <img key={f.id} src={supabase.storage.from("carregamento-fotos").getPublicUrl(f.url).data.publicUrl} alt="" className="h-20 rounded mt-2 cursor-pointer" />
                     ))}
                   </>
-                ) : (
+                )}
+                {/* Última etapa: NF (PDF) e XML */}
+                {isUltimaEtapa && (
                   <>
-                    {/* Última etapa: NF (PDF) e XML */}
                     <Label className="font-medium">Upload Nota Fiscal (PDF) *</Label>
                     {!nfEnviada ? (
                       <div className="flex gap-2 items-center mb-2">
@@ -407,26 +418,37 @@ const CarregamentoDetalhe = () => {
                   </>
                 )}
 
-                {/* Observação da etapa */}
-                <div className="space-y-1">
-                  <Label>Observação da etapa</Label>
-                  <Input
-                    value={obs.length ? obs : etapaObservacoes[etapaAtual]}
-                    onChange={e => setObs(e.target.value)}
-                    disabled={bloqueado}
-                  />
-                  {!bloqueado && <Button size="sm" className="mt-1" onClick={handleObsSave}>Salvar Observação</Button>}
-                </div>
+                {/* Etapa 0: só info, sem upload nem observação. */}
+                {etapaAtual === 0 && (
+                  <div className="font-medium text-muted-foreground">
+                    Aguardando início: o carregamento está registrado, mas ainda não foi iniciado. Assim que a chegada for informada e foto anexada, o processo prossegue para a próxima etapa!
+                  </div>
+                )}
+
+                {/* Observação da etapa, se for etapa válida (exceto etapa 0) */}
+                {etapaAtual >= 1 && etapaAtual <= 5 && (
+                  <div className="space-y-1">
+                    <Label>Observação da etapa</Label>
+                    <Input
+                      value={obs.length ? obs : etapaObservacoes[etapaAtual]}
+                      onChange={e => setObs(e.target.value)}
+                      disabled={bloqueado}
+                    />
+                    {!bloqueado && <Button size="sm" className="mt-1" onClick={handleObsSave}>Salvar Observação</Button>}
+                  </div>
+                )}
 
                 {/* Botão para avançar etapa:
                     - Etapas 1-4: liberado se já anexou foto
                     - Etapa 5: liberado só se NF e XML anexados
+                    - Etapa 0: desbloqueado se preenchimento estiver ok (pode customizar restrições se quiser)
                 */}
                 <Button
                   size="lg"
                   className="mt-2"
-                  disabled={bloqueado ||
-                    (!isUltimaEtapa && !(fotosPorEtapa[etapaAtual]?.length > 0)) ||
+                  disabled={
+                    bloqueado ||
+                    (etapaAtual >= 1 && etapaAtual < 5 && !(fotosPorEtapa[etapaAtual]?.length > 0)) ||
                     (isUltimaEtapa && !(nfEnviada && xmlEnviado))
                   }
                   onClick={avancarEtapa}
