@@ -70,10 +70,11 @@ const Liberacoes = () => {
     enabled: !!user && userRole === "armazem",
   });
 
+  // FILTRO AGORA DIRETAMENTE NA QUERY
   const { data: liberacoesData, isLoading, error } = useQuery({
     queryKey: ["liberacoes", currentCliente?.id, currentArmazem?.id],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from("liberacoes")
         .select(`
           id,
@@ -84,21 +85,21 @@ const Liberacoes = () => {
           data_liberacao,
           created_at,
           cliente_id,
-          cliente_nome,
           clientes(nome, cnpj_cpf),
           produto:produtos(id, nome),
           armazem:armazens(id, nome, cidade, estado)
         `)
         .order("created_at", { ascending: false });
-      if (error) throw error;
-      let filtered = data ?? [];
+
       if (userRole === "cliente" && currentCliente?.id) {
-        filtered = filtered.filter((l: any) => l.cliente_id === currentCliente.id);
+        query = query.eq("cliente_id", currentCliente.id);
       }
       if (userRole === "armazem" && currentArmazem?.id) {
-        filtered = filtered.filter((l: any) => l.armazem?.id === currentArmazem.id);
+        query = query.eq("armazem_id", currentArmazem.id);
       }
-      return filtered;
+      const { data, error } = await query;
+      if (error) throw error;
+      return data ?? [];
     },
     refetchInterval: 30000,
     enabled: (userRole !== "cliente" || !!currentCliente?.id) && (userRole !== "armazem" || !!currentArmazem?.id),
@@ -109,7 +110,7 @@ const Liberacoes = () => {
     return liberacoesData.map((item: any) => ({
       id: item.id,
       produto: item.produto?.nome || "N/A",
-      cliente: item.cliente_nome || item.clientes?.nome || "N/A",
+      cliente: item.clientes?.nome || "N/A",
       quantidade: item.quantidade_liberada,
       quantidadeRetirada: item.quantidade_retirada,
       pedido: item.pedido_interno,
@@ -174,14 +175,22 @@ const Liberacoes = () => {
   const [selectedArmazens, setSelectedArmazens] = useState<string[]>([]);
 
   const allStatuses: StatusLib[] = ["pendente", "parcial", "concluido"];
-  const allArmazens = useMemo(() =>
-    Array.from(new Set(liberacoes.map((l) => l.armazem).filter(Boolean))) as string[],
+  const allArmazens = useMemo(
+    () => Array.from(new Set(liberacoes.map((l) => l.armazem).filter(Boolean))) as string[],
     [liberacoes]
   );
 
-  const toggleStatus = (st: StatusLib) => setSelectedStatuses((prev) => (prev.includes(st) ? prev.filter((s) => s !== st) : [...prev, st]));
-  const toggleArmazem = (a: string) => setSelectedArmazens((prev) => (prev.includes(a) ? prev.filter((x) => x !== a) : [...prev, a]));
-  const clearFilters = () => { setSearch(""); setSelectedStatuses([]); setDateFrom(""); setDateTo(""); setSelectedArmazens([]); };
+  const toggleStatus = (st: StatusLib) =>
+    setSelectedStatuses((prev) => (prev.includes(st) ? prev.filter((s) => s !== st) : [...prev, st]));
+  const toggleArmazem = (a: string) =>
+    setSelectedArmazens((prev) => (prev.includes(a) ? prev.filter((x) => x !== a) : [...prev, a]));
+  const clearFilters = () => {
+    setSearch("");
+    setSelectedStatuses([]);
+    setDateFrom("");
+    setDateTo("");
+    setSelectedArmazens([]);
+  };
 
   const filteredLiberacoes = useMemo(() => {
     return liberacoes.filter((l) => {
@@ -207,7 +216,10 @@ const Liberacoes = () => {
 
   const showingCount = filteredLiberacoes.length;
   const totalCount = liberacoes.length;
-  const activeAdvancedCount = (selectedStatuses.length ? 1 : 0) + (selectedArmazens.length ? 1 : 0) + ((dateFrom || dateTo) ? 1 : 0);
+  const activeAdvancedCount =
+    (selectedStatuses.length ? 1 : 0) +
+    (selectedArmazens.length ? 1 : 0) +
+    (dateFrom || dateTo ? 1 : 0);
 
   const resetFormNovaLiberacao = () => {
     setNovaLiberacao({ produto: "", armazem: "", cliente_id: "", pedido: "", quantidade: "" });
@@ -241,7 +253,7 @@ const Liberacoes = () => {
           produto_id: produto,
           armazem_id: armazem,
           cliente_id: cliente_id,
-          cliente_nome: clienteSelecionado.nome,
+          // Removido cliente_nome: não mais necessário/desnormalizado
           pedido_interno: pedido.trim(),
           quantidade_liberada: qtdNum,
           quantidade_retirada: 0,
@@ -463,8 +475,8 @@ const Liberacoes = () => {
                   <Badge
                     variant={
                       lib.status === "concluido" ? "default" :
-                      lib.status === "parcial" ? "secondary" :
-                      "outline"
+                        lib.status === "parcial" ? "secondary" :
+                          "outline"
                     }
                   >
                     {lib.status === "concluido" ? "Concluído" : lib.status === "parcial" ? "Parcial" : "Pendente"}
