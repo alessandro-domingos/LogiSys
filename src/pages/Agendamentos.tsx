@@ -109,11 +109,11 @@ const Agendamentos = () => {
     enabled: !!user && userRole === "armazem",
   });
 
-  // Buscar agendamentos do banco
+  // Buscar agendamentos do banco - FILTRO NA QUERY!
   const { data: agendamentosData, isLoading, error } = useQuery({
     queryKey: ["agendamentos", currentCliente?.id, currentArmazem?.id],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from("agendamentos")
         .select(`
           id,
@@ -138,19 +138,16 @@ const Agendamentos = () => {
           )
         `)
         .order("created_at", { ascending: false });
-      if (error) throw error;
-      let filteredData = data || [];
+
       if (userRole === "cliente" && currentCliente?.id) {
-        filteredData = filteredData.filter((ag: any) =>
-          ag.liberacao?.cliente_id === currentCliente.id
-        );
+        query = query.eq("cliente_id", currentCliente.id);
       }
       if (userRole === "armazem" && currentArmazem?.id) {
-        filteredData = filteredData.filter((ag: any) =>
-          ag.liberacao?.armazem?.id === currentArmazem.id
-        );
+        query = query.eq("armazem_id", currentArmazem.id);
       }
-      return filteredData;
+      const { data, error } = await query;
+      if (error) throw error;
+      return data ?? [];
     },
     refetchInterval: 30000,
     enabled: (userRole !== "cliente" || !!currentCliente?.id) && (userRole !== "armazem" || !!currentArmazem?.id),
@@ -191,10 +188,9 @@ const Agendamentos = () => {
       documento: item.motorista_documento || "N/A",
       pedido: item.liberacao?.pedido_interno || "N/A",
       status: item.status as AgendamentoStatus,
-      armazem:
-        item.liberacao?.armazem?.cidade ||
-        item.liberacao?.armazem?.estado ||
-        "",
+      armazem: item.liberacao?.armazem
+        ? `${item.liberacao.armazem.cidade}/${item.liberacao.armazem.estado} - ${item.liberacao.armazem.nome}`
+        : "N/A",
       produto_id: item.liberacao?.produto?.id,
       armazem_id: item.liberacao?.armazem?.id,
       liberacao_id: item.liberacao?.id,
@@ -229,7 +225,7 @@ const Agendamentos = () => {
           cliente_id,
           clientes(nome),
           produto:produtos(nome),
-          armazem:armazens(cidade, estado)
+          armazem:armazens(id, cidade, estado, nome)
         `)
         .in("status", ["pendente", "parcial"])
         .order("created_at", { ascending: false });
@@ -259,7 +255,7 @@ const Agendamentos = () => {
     setFormError("");
   };
 
-  // FUNÇÃO CORRIGIDA PARA SALVAR cliente_id
+  // >>> FUNÇÃO AJUSTADA: PREENCHE cliente_id E armazem_id <<<
   const handleCreateAgendamento = async () => {
     setFormError("");
     const erros = validateAgendamento(novoAgendamento);
@@ -282,9 +278,10 @@ const Agendamentos = () => {
       const placaSemMascara = (novoAgendamento.placa ?? "").replace(/[^A-Z0-9]/gi, "").toUpperCase();
       const cpfSemMascara = (novoAgendamento.documento ?? "").replace(/\D/g, "");
 
-      // 🟢 Pegue o cliente_id da liberação selecionada!
+      // 🟢 Pegue o cliente_id e armazem_id da liberação selecionada!
       const selectedLiberacao = liberacoesPendentes?.find((l) => l.id === novoAgendamento.liberacao);
       const clienteIdDaLiberacao = selectedLiberacao?.cliente_id || null;
+      const armazemIdDaLiberacao = selectedLiberacao?.armazem?.id || null;
 
       const { data: userData } = await supabase.auth.getUser();
       const { data: agendData, error: errAgend } = await supabase
@@ -301,7 +298,8 @@ const Agendamentos = () => {
           observacoes: novoAgendamento.observacoes || null,
           status: "confirmado",
           created_by: userData.user?.id,
-          cliente_id: clienteIdDaLiberacao, // <-- MODIFICAÇÃO AQUI!
+          cliente_id: clienteIdDaLiberacao,
+          armazem_id: armazemIdDaLiberacao,
         })
         .select(`
           id,
