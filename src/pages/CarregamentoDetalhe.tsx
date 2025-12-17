@@ -40,58 +40,47 @@ const CarregamentoDetalhe = () => {
   const [uploadingNF, setUploadingNF] = useState(false);
   const [uploadingXML, setUploadingXML] = useState(false);
 
-  // Estado de permissão
+  // Estado de permissão simplificado
   const [userId, setUserId] = useState<string | null>(null);
   const [roles, setRoles] = useState<string[]>([]);
   const [armazemId, setArmazemId] = useState<string | null>(null);
   const [clienteId, setClienteId] = useState<string | null>(null);
 
+  // 1. Busca apenas os roles do user autenticado
   useEffect(() => {
-    console.log("[DEBUG] Buscando usuário autenticado...");
     supabase.auth.getUser().then(({ data }) => {
       setUserId(data.user?.id ?? null);
-      console.log("[DEBUG] userId:", data.user?.id ?? null);
     });
-    // Buscar roles
-    const fetchRoles = async () => {
-      if (!userId) { 
-        console.log("[DEBUG] fetchRoles: userId não definido, abortando...");
-        return; 
-      }
-      console.log("[DEBUG] Buscando roles para userId:", userId);
-      const { data, error } = await supabase
+    const fetchRolesAndVinculos = async () => {
+      if (!userId) return;
+      const { data: rolesData } = await supabase
         .from("user_roles")
         .select("role")
         .eq("user_id", userId);
-      console.log("[DEBUG] Resultado roles:", { data, error });
-      if (data) setRoles(data.map((r) => r.role));
-    };
-    // Buscar armazem/cliente vinculado ao usuário
-    const fetchVinculos = async () => {
-      if (!userId) { 
-        console.log("[DEBUG] fetchVinculos: userId não definido, abortando...");
-        return; 
+      if (rolesData) setRoles(rolesData.map((r) => r.role));
+      // Se for cliente/armazem, busca so o FK
+      if (rolesData?.some((r) => r.role === 'armazem')) {
+        const { data: armazem } = await supabase
+          .from("armazens")
+          .select("id")
+          .eq("user_id", userId)
+          .single();
+        setArmazemId(armazem?.id ?? null);
+      } else {
+        setArmazemId(null);
       }
-      console.log("[DEBUG] Buscando armazem vinculado ao userId:", userId);
-      const { data: armazem, error: armazemError } = await supabase
-        .from("armazens")
-        .select("id")
-        .eq("user_id", userId)
-        .single();
-      console.log("[DEBUG] Resultado armazem:", { armazem, armazemError });
-      setArmazemId(armazem?.id ?? null);
-
-      console.log("[DEBUG] Buscando cliente vinculado ao userId:", userId);
-      const { data: cliente, error: clienteError } = await supabase
-        .from("clientes")
-        .select("id")
-        .eq("user_id", userId)
-        .single();
-      console.log("[DEBUG] Resultado cliente:", { cliente, clienteError });
-      setClienteId(cliente?.id ?? null);
+      if (rolesData?.some((r) => r.role === 'cliente')) {
+        const { data: cliente } = await supabase
+          .from("clientes")
+          .select("id")
+          .eq("user_id", userId)
+          .single();
+        setClienteId(cliente?.id ?? null);
+      } else {
+        setClienteId(null);
+      }
     };
-    fetchRoles();
-    fetchVinculos();
+    fetchRolesAndVinculos();
     // eslint-disable-next-line
   }, [userId]);
 
@@ -100,7 +89,6 @@ const CarregamentoDetalhe = () => {
     queryKey: ["carregamento-detalhe", id],
     enabled: !!id,
     queryFn: async () => {
-      console.log("[DEBUG] Buscando detalhes do carregamento id:", id);
       const { data, error } = await supabase
         .from("carregamentos")
         .select(`
@@ -122,14 +110,13 @@ const CarregamentoDetalhe = () => {
         `)
         .eq("id", id)
         .single();
-      console.log("[DEBUG] Resultado SUPABASE carregamento:", { data, error });
       if (error) throw error;
       return data;
     },
     refetchOnWindowFocus: true,
   });
 
-  // Controle de permisão lógica
+  // Permissão SIMPLIFICADA baseada só em roles e FKs do carregamento
   const podeEditar = useMemo(() => {
     if (!userId || !roles.length || !carregamento) return false;
     if (roles.includes("admin") || roles.includes("logistica")) return true;
@@ -139,10 +126,8 @@ const CarregamentoDetalhe = () => {
   }, [userId, roles, carregamento, armazemId, clienteId]);
 
   useEffect(() => {
+    // Só redireciona se carregou e não tem permissão baseada no carregamento/roles
     if (!isLoading && carregamento && !podeEditar) {
-      console.warn("[PERMISSÃO] Usuário logado não tem permissão para visualizar este carregamento!", {
-        userId, roles, armazemId, clienteId, carregamento
-      });
       navigate("/carregamentos");
     }
     // eslint-disable-next-line
@@ -335,9 +320,6 @@ const CarregamentoDetalhe = () => {
   const xmlEnviado = Boolean(documentosPorTipo["xml"]);
 
   if (isLoading || !carregamento || userId == null || roles.length === 0) {
-    console.log("[DEBUG] Estado de loading ou dados insuficientes", {
-      isLoading, carregamento, userId, roles
-    });
     return (
       <div className="min-h-screen bg-background">
         <PageHeader title="Detalhes do Carregamento" />
@@ -348,7 +330,6 @@ const CarregamentoDetalhe = () => {
     );
   }
   if (error) {
-    console.error("[ERRO] Erro ao carregar detalhes do carregamento:", error);
     return (
       <div className="min-h-screen bg-background">
         <PageHeader title="Detalhes do Carregamento" />
