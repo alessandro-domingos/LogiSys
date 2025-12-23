@@ -5,20 +5,23 @@ import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/PageHeader";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Loader2, CheckCircle, FilePlus, ArrowRight } from "lucide-react";
 
 const ETAPAS = [
-  { id: 0, nome: "Aguardando início" },
   { id: 1, nome: "Chegada" },
   { id: 2, nome: "Início Carregamento" },
   { id: 3, nome: "Carregando" },
-  { id: 4, nome: "Finalização Processual" },
-  { id: 5, nome: "Finalização Fiscal" }
+  { id: 4, nome: "Carreg. Finalizado" },
+  { id: 5, nome: "Documentação" },
+  { id: 6, nome: "Finalizado" },
 ];
 
-const getEtapaLabel = (etapa_atual: number) => {
-  const found = ETAPAS.find(e => e.id === etapa_atual);
-  return found ? found.nome : `Etapa ${etapa_atual}`;
+const getEtapaLabel = (etapa_id: number) => {
+  const found = ETAPAS.find(e => e.id === etapa_id);
+  return found ? found.nome : `Etapa ${etapa_id}`;
 };
 
 const getStatusLabel = (status: string | null) => {
@@ -50,7 +53,11 @@ const CarregamentoDetalhe = () => {
   const [clienteId, setClienteId] = useState<string | null>(null);
   const [armazemId, setArmazemId] = useState<string | null>(null);
 
-  // Descobre usuário logado
+  // Dummy local stage (for layout only)
+  const [stageFile, setStageFile] = useState<File | null>(null);
+  const [stageObs, setStageObs] = useState("");
+  const [selectedEtapa, setSelectedEtapa] = useState<number | null>(null);
+
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       setUserId(data.user?.id ?? null);
@@ -143,7 +150,7 @@ const CarregamentoDetalhe = () => {
       )
   });
 
-  // Redireciona p/ lista se não pode ver
+  // Redireciona para lista caso não possa ver
   useEffect(() => {
     if (
       !isLoading &&
@@ -164,6 +171,17 @@ const CarregamentoDetalhe = () => {
     }
     // eslint-disable-next-line
   }, [isLoading, carregamento, userId, roles, clienteId, armazemId, navigate]);
+
+  // Layout states
+  useEffect(() => {
+    if (carregamento?.etapa_atual != null) {
+      setSelectedEtapa(carregamento.etapa_atual + 1); // +1 pois etapas começam do 1 na nova lista
+    }
+  }, [carregamento]);
+
+  // Parâmetros do processo para exemplo das estatísticas
+  const processoInicio = carregamento?.data_chegada ? new Date(carregamento.data_chegada) : null;
+  const processoCriacao = carregamento?.created_at ? new Date(carregamento.created_at) : null;
 
   if (
     isLoading ||
@@ -203,37 +221,159 @@ const CarregamentoDetalhe = () => {
   // Exibe detalhes básicos
   const agendamento = carregamento.agendamento;
 
+  // Área superior: fluxo de etapas do processo
+  const renderEtapasFluxo = () => (
+    <div className="flex items-center justify-center gap-6 py-5">
+      {ETAPAS.map((etapa, idx) => {
+        const etapaIndex = etapa.id;
+        const isFinalizada = (carregamento.etapa_atual ?? 0) + 1 > etapaIndex;
+        const isAtual = selectedEtapa === etapaIndex;
+        return (
+          <div
+            key={etapa.id}
+            className={`flex flex-col items-center cursor-pointer transition-all ${
+              isFinalizada
+                ? "text-green-600"
+                : isAtual
+                ? "text-primary scale-105"
+                : "text-muted-foreground hover:text-primary/80"
+            }`}
+            onClick={() => setSelectedEtapa(etapaIndex)}
+          >
+            <div
+              className={`w-8 h-8 flex items-center justify-center rounded-full border-2
+                ${isFinalizada ? "bg-green-200 border-green-600" : isAtual ? "bg-primary border-primary text-white" : "bg-background border-muted-foreground"}`}
+            >
+              {isFinalizada ? <CheckCircle className="w-5 h-5" /> : etapaIndex}
+            </div>
+            <div className="text-xs mt-1 font-medium text-center" style={{ width: 80 }}>
+              {etapa.nome}
+            </div>
+            {idx < ETAPAS.length - 1 && (
+              <ArrowRight className="mt-3 text-muted-foreground w-6 h-6" />
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+
+  // Central: área de atuação (layout apenas)
+  const renderCentralAtuacao = () => {
+    // Se etapa selecionada for 5.Documentação, mostra dois uploads para nota fiscal e xml
+    const isEtapaDoc = selectedEtapa === 5;
+    const isFinalizada = carregamento.etapa_atual != null
+      ? selectedEtapa && selectedEtapa <= (carregamento.etapa_atual + 1)
+      : false;
+    return (
+      <Card className="mb-6">
+        <CardContent className="p-6 space-y-5">
+          {!isFinalizada ? (
+            <>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">
+                  {isEtapaDoc
+                    ? "Anexar Nota Fiscal (PDF) *"
+                    : "Anexar foto obrigatória *"}
+                </label>
+                <Input
+                  disabled={isFinalizada}
+                  type="file"
+                  accept={isEtapaDoc ? ".pdf" : "image/*"}
+                  onChange={e => setStageFile(e.target.files?.[0] ?? null)}
+                  className="w-full"
+                />
+                {isEtapaDoc && (
+                  <>
+                    <label className="text-sm font-medium mt-3">
+                      Anexar Arquivo XML
+                    </label>
+                    <Input
+                      disabled={isFinalizada}
+                      type="file"
+                      accept=".xml"
+                      className="w-full"
+                    />
+                  </>
+                )}
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Observações (opcional)</label>
+                <Textarea
+                  disabled={isFinalizada}
+                  placeholder="Digite observações sobre esta etapa..."
+                  value={stageObs}
+                  onChange={e => setStageObs(e.target.value)}
+                />
+              </div>
+              <div className="flex justify-end pt-3">
+                <Button
+                  disabled={!stageFile}
+                  variant="primary"
+                  size="lg"
+                >
+                  Próxima Etapa
+                </Button>
+              </div>
+            </>
+          ) : (
+            <div className="text-center text-muted-foreground py-6">
+              <FilePlus className="inline-block w-6 h-6 mr-2" />
+              <span>Etapa finalizada. Você pode apenas visualizar os anexos e dados desta etapa.</span>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    );
+  };
+
+  // Inferior: área de informações gerais + estatísticas
+  const renderInformacoesProcesso = () => {
+    // Exemplo de tempos e estatísticas para layout
+    const tempoTotalDecorrido = processoInicio
+      ? `${Math.round((Date.now() - processoInicio.getTime()) / 1000 / 60)} min`
+      : "N/A";
+    const tempoTotalFinalizacao = processoInicio
+      ? carregamento.status === "finalizado"
+        ? `${Math.round(((processoCriacao ? processoCriacao.getTime() : Date.now()) - processoInicio.getTime()) / 1000 / 60)} min`
+        : "-"
+      : "N/A";
+
+    return (
+      <Card>
+        <CardContent className="p-6 grid gap-3 md:grid-cols-2">
+          <div>
+            <h3 className="font-semibold mb-2">Informações Gerais</h3>
+            <p><b>Nome do cliente:</b> {agendamento?.cliente?.nome || "N/A"}</p>
+            <p><b>Quantidade:</b> {agendamento?.quantidade ?? "N/A"} toneladas</p>
+            <p><b>Placa caminhão:</b> {agendamento?.placa_caminhao || "N/A"}</p>
+            <p><b>Motorista:</b> {agendamento?.motorista_nome || "N/A"}</p>
+            <p><b>Doc. Motorista:</b> {agendamento?.motorista_documento || "N/A"}</p>
+            <p><b>Número NF:</b> {carregamento.numero_nf || "N/A"}</p>
+          </div>
+          <div>
+            <h3 className="font-semibold mb-2">Estatísticas do Carregamento</h3>
+            <p><b>Tempo em cada etapa:</b> <span className="text-muted-foreground">-- min (implementação futura)</span></p>
+            <p><b>Tempo total decorrido:</b> {tempoTotalDecorrido}</p>
+            <p><b>Tempo até finalização:</b> {tempoTotalFinalizacao}</p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <PageHeader title="Detalhes do Carregamento" />
-      <div className="container mx-auto px-6 py-6">
-        <Card>
-          <CardContent className="p-8 space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="font-bold text-xl">
-                Cliente: {agendamento?.cliente?.nome || "N/A"}
-              </h2>
-              <Badge variant={getStatusBadgeVariant(carregamento.status)}>{getStatusLabel(carregamento.status)}</Badge>
-            </div>
-            <div>
-              <p><b>Etapa atual:</b> {getEtapaLabel(carregamento.etapa_atual ?? 0)}</p>
-              <p><b>Número NF:</b> {carregamento.numero_nf || "N/A"}</p>
-              <p><b>Data chegada:</b> {carregamento.data_chegada ? new Date(carregamento.data_chegada).toLocaleString("pt-BR") : "N/A"}</p>
-              <p><b>Data criação:</b> {carregamento.created_at ? new Date(carregamento.created_at).toLocaleString("pt-BR") : "N/A"}</p>
-            </div>
-            {agendamento && (
-              <div className="pt-3">
-                <h3 className="font-semibold">Dados do agendamento</h3>
-                <p><b>Data retirada:</b> {agendamento.data_retirada || "N/A"}</p>
-                <p><b>Horário:</b> {agendamento.horario || "N/A"}</p>
-                <p><b>Quantidade:</b> {agendamento.quantidade ?? "N/A"} toneladas</p>
-                <p><b>Placa caminhão:</b> {agendamento.placa_caminhao || "N/A"}</p>
-                <p><b>Motorista:</b> {agendamento.motorista_nome || "N/A"}</p>
-                <p><b>Documento motorista:</b> {agendamento.motorista_documento || "N/A"}</p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+      <div className="container mx-auto px-6 py-6 gap-8 flex flex-col">
+        {/* Fluxo do processo (topo) */}
+        {renderEtapasFluxo()}
+
+        {/* Área central de atuação */}
+        {renderCentralAtuacao()}
+
+        {/* Informações gerais e estatísticas */}
+        {renderInformacoesProcesso()}
       </div>
     </div>
   );
