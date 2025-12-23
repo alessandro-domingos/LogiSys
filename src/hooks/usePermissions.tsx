@@ -27,6 +27,8 @@ export const usePermissions = () => {
   const { userRole, user, loading: authLoading } = useAuth();
   const [permissions, setPermissions] = useState<Record<Resource, Permission>>({} as any);
   const [loading, setLoading] = useState(true);
+  const [clienteId, setClienteId] = useState<string | null>(null);
+  const [armazemId, setArmazemId] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchPermissions = async () => {
@@ -87,6 +89,41 @@ export const usePermissions = () => {
     fetchPermissions();
   }, [userRole, user?.id, authLoading]);
 
+  // Novo: busca clienteId/armazemId apenas se for cliente ou armazem!
+  useEffect(() => {
+    const fetchVinculos = async () => {
+      if (authLoading || !userRole || !user) {
+        setClienteId(null);
+        setArmazemId(null);
+        return;
+      }
+
+      if (userRole === 'cliente') {
+        const { data, error } = await supabase
+          .from("clientes")
+          .select("id")
+          .eq("user_id", user.id)
+          .single();
+        setClienteId(data?.id ?? null);
+      } else {
+        setClienteId(null);
+      }
+
+      if (userRole === 'armazem') {
+        const { data, error } = await supabase
+          .from("armazens")
+          .select("id")
+          .eq("user_id", user.id)
+          .single();
+        setArmazemId(data?.id ?? null);
+      } else {
+        setArmazemId(null);
+      }
+    };
+
+    fetchVinculos();
+  }, [userRole, user?.id, authLoading]);
+
   /**
    * Permite visualizar ou manipular o recurso clientes apenas para admin ou logistica, sempre.
    */
@@ -122,5 +159,5 @@ export const usePermissions = () => {
     return hasAccess;
   };
 
-  return { permissions, canAccess, loading };
+  return { permissions, canAccess, loading, clienteId, armazemId };
 };
