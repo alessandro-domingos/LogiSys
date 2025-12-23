@@ -58,6 +58,11 @@ const getStatusBadgeVariant = (status: string | null) => {
   }
 };
 
+const LABEL_STYLE =
+  "block text-[0.78rem] text-gray-400 mb-1 tracking-wide font-normal select-none";
+const VALUE_STYLE =
+  "block text-[1.06rem] font-semibold text-foreground break-all";
+
 const CarregamentoDetalhe = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -77,7 +82,10 @@ const CarregamentoDetalhe = () => {
 
     const fetchRoles = async () => {
       if (!userId) return;
-      const { data } = await supabase.from("user_roles").select("role").eq("user_id", userId);
+      const { data } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", userId);
       if (data) setRoles(data.map((r) => r.role));
     };
     fetchRoles();
@@ -87,13 +95,21 @@ const CarregamentoDetalhe = () => {
     const fetchVinculos = async () => {
       if (!userId || roles.length === 0) return;
       if (roles.includes("cliente")) {
-        const { data: cliente } = await supabase.from("clientes").select("id").eq("user_id", userId).single();
+        const { data: cliente } = await supabase
+          .from("clientes")
+          .select("id")
+          .eq("user_id", userId)
+          .single();
         setClienteId(cliente?.id ?? null);
       } else {
         setClienteId(null);
       }
       if (roles.includes("armazem")) {
-        const { data: armazem } = await supabase.from("armazens").select("id").eq("user_id", userId).single();
+        const { data: armazem } = await supabase
+          .from("armazens")
+          .select("id")
+          .eq("user_id", userId)
+          .single();
         setArmazemId(armazem?.id ?? null);
       } else {
         setArmazemId(null);
@@ -106,7 +122,10 @@ const CarregamentoDetalhe = () => {
   const { data: carregamento, isLoading, error } = useQuery({
     queryKey: ["carregamento-detalhe", id, clienteId, armazemId, roles],
     queryFn: async () => {
-      let query = supabase.from("carregamentos").select(`
+      let query = supabase
+        .from("carregamentos")
+        .select(
+          `
         id,
         status,
         etapa_atual,
@@ -127,7 +146,10 @@ const CarregamentoDetalhe = () => {
           motorista_nome,
           motorista_documento
         )
-      `).eq("id", id).single();
+      `
+        )
+        .eq("id", id)
+        .single();
 
       const { data, error } = await query;
       if (error) throw error;
@@ -137,9 +159,9 @@ const CarregamentoDetalhe = () => {
       !!id &&
       userId != null &&
       roles.length > 0 &&
-      ((!roles.includes("cliente") && !roles.includes("armazem"))
-        || (roles.includes("cliente") && clienteId !== null)
-        || (roles.includes("armazem") && armazemId !== null)),
+      ((!roles.includes("cliente") && !roles.includes("armazem")) ||
+        (roles.includes("cliente") && clienteId !== null) ||
+        (roles.includes("armazem") && armazemId !== null)),
   });
 
   useEffect(() => {
@@ -170,71 +192,116 @@ const CarregamentoDetalhe = () => {
   }, [isLoading, carregamento, userId, roles, clienteId, armazemId, navigate]);
 
   // Stats
-  const processoInicio = carregamento?.data_chegada ? new Date(carregamento.data_chegada) : null;
-  const processoCriacao = carregamento?.created_at ? new Date(carregamento.created_at) : null;
+  const processoInicio = carregamento?.data_chegada
+    ? new Date(carregamento.data_chegada)
+    : null;
+  const processoCriacao = carregamento?.created_at
+    ? new Date(carregamento.created_at)
+    : null;
 
   // ----------- COMPONENTES DE LAYOUT -----------
 
-  // Fluxo das etapas, menor, sem bordas, labels ajustados, data mais próxima do label, centralização visual corrigida
+  // Fluxo de etapas ajustado, ocupando toda largura, círculos centralizados e alinhados, sem deslocamento se o nome das etapas tiver 1 ou 2 linhas
   const renderEtapasFluxo = () => (
-    <div className="w-full pt-3 pb-5 flex flex-col">
-      <div className="flex flex-row items-end justify-center gap-0 md:gap-2 px-2 overflow-x-auto">
-        {ETAPAS.map((etapa, idx) => {
-          const etapaIndex = etapa.id;
-          const isFinalizada = (carregamento.etapa_atual ?? 0) + 1 > etapaIndex;
-          const isAtual = selectedEtapa === etapaIndex;
-          return (
-            <div
-              key={etapa.id}
-              className="flex flex-col items-center min-w-[96px] max-w-[96px] mx-1 cursor-pointer group transition h-[104px] justify-end"
-              onClick={() => setSelectedEtapa(etapaIndex)}
-              style={{ zIndex: 10 }}
-            >
-              {/* Círculo reduzido, sem borda quando não-finalizado, cor fonte azul nome etapa corrente */}
+    <div className="w-full pt-1 pb-4 flex flex-col">
+      <div className="w-full flex flex-row justify-center px-0 overflow-x-auto">
+        <div className="flex flex-row gap-0 w-full justify-center items-end">
+          {ETAPAS.map((etapa, idx) => {
+            const etapaIndex = etapa.id;
+            const isFinalizada = (carregamento.etapa_atual ?? 0) + 1 > etapaIndex;
+            const isAtual = selectedEtapa === etapaIndex;
+
+            // Para garantir alinhamento distribua pelo container do texto (posição absoluta trick)
+            return (
               <div
-                className={`
-                  w-9 h-9 flex items-center justify-center rounded-full
-                  font-bold text-[1rem] shadow
-                  transition
-                  ${isFinalizada
-                    ? "bg-green-200 text-green-800"
-                    : isAtual
-                      ? "bg-primary text-white scale-110 shadow-lg"
-                      : "bg-gray-100 text-muted-foreground group-hover:text-primary/80"
-                  }
-                `}
+                key={etapa.id}
+                // min-w-[88px] força os círculos a terem espaçamento mais amplo + grow para distribuir
+                className="flex-1 flex flex-col items-center justify-end min-w-[92px] mx-0"
+                style={{ position: "relative", zIndex: 10, height: 90 }}
+                onClick={() => setSelectedEtapa(etapaIndex)}
               >
-                {isFinalizada
-                  ? <CheckCircle className="w-6 h-6" />
-                  : etapaIndex}
+                <div
+                  className={`
+                    w-7 h-7 flex items-center justify-center rounded-full mb-2
+                    font-bold text-[0.93rem]
+                    shadow transition select-none
+                    ${
+                      isFinalizada
+                        ? "bg-green-200 text-green-800"
+                        : isAtual
+                        ? "bg-primary text-white scale-110 shadow-lg"
+                        : "bg-gray-400 text-white"
+                    }
+                  `}
+                  style={{
+                    minWidth: 28,
+                    minHeight: 28,
+                    boxShadow:
+                      isAtual || isFinalizada
+                        ? "0 2px 6px 0 rgba(80,80,80,.07)"
+                        : "none",
+                    border: "none",
+                    cursor: "pointer",
+                  }}
+                >
+                  {isFinalizada ? <CheckCircle className="w-5 h-5" /> : etapaIndex}
+                </div>
+                {/* STACKED label & data, usa min-height para alinhar base do texto */}
+                <div
+                  className={`flex flex-col items-center justify-end`}
+                  style={{ minHeight: 34, width: 94, position: "relative" }}
+                >
+                  <span
+                    /* Mantém label sempre mesmo topo */
+                    className={`inline-block font-medium text-center leading-tight break-words
+                      ${isAtual ? "text-primary" : "text-foreground"}
+                    `}
+                    style={{
+                      fontSize: "0.92rem",
+                      fontWeight: isAtual ? 700 : 500,
+                      minHeight: "18px",
+                      /* Garante q a linha de cima alinhe entre todos os labels */
+                      lineHeight: "1.05",
+                    }}
+                  >
+                    {etapa.nome.split(" ").length > 2
+                      ? (
+                          <>
+                            {etapa.nome.split(" ").slice(0, 2).join(" ")}
+                            <br />
+                            {etapa.nome.split(" ").slice(2).join(" ")}
+                          </>
+                        )
+                      : etapa.nome}
+                  </span>
+                  <span
+                    className="block text-[11px] text-muted-foreground font-medium mt-[2px]"
+                    style={{ minHeight: 0 }}
+                  >
+                    {/* Exemplo: real apenas para Chegada no momento */}
+                    {etapaIndex === 1 && carregamento.data_chegada
+                      ? formatarDataHora(carregamento.data_chegada)
+                      : "-"}
+                  </span>
+                </div>
               </div>
-              <div className={`flex flex-col items-center justify-start min-h-[38px] mt-1 w-full`}>
-                <span className={`text-xs font-semibold text-center leading-tight break-words ${isAtual ? "text-primary" : "text-foreground"}`} style={{ fontWeight: 600 }}>
-                  {etapa.nome}
-                </span>
-                <span className="text-[11px] text-muted-foreground font-medium leading-tight mt-1" style={{ minHeight: 0, marginTop: 2 }}>
-                  {/* Real apenas para Chegada por enquanto */}
-                  {etapaIndex === 1 && carregamento.data_chegada
-                    ? formatarDataHora(carregamento.data_chegada)
-                    : "-"}
-                </span>
-              </div>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
       </div>
     </div>
   );
 
   const renderCentralAtuacao = () => {
     const isEtapaDoc = selectedEtapa === 5;
-    const isFinalizada = carregamento.etapa_atual != null
-      ? selectedEtapa && selectedEtapa <= (carregamento.etapa_atual + 1)
-      : false;
+    const isFinalizada =
+      carregamento.etapa_atual != null
+        ? selectedEtapa && selectedEtapa <= carregamento.etapa_atual + 1
+        : false;
 
     return (
       <Card className="mb-8 shadow-sm">
-        <CardContent className="p-5 space-y-6">
+        <CardContent className="p-4 space-y-6">
           {!isFinalizada ? (
             <>
               <div className="space-y-2">
@@ -252,7 +319,9 @@ const CarregamentoDetalhe = () => {
                 />
                 {isEtapaDoc && (
                   <>
-                    <label className="text-base font-semibold mt-2 block">Anexar Arquivo XML</label>
+                    <label className="text-base font-semibold mt-2 block">
+                      Anexar Arquivo XML
+                    </label>
                     <Input
                       disabled={isFinalizada}
                       type="file"
@@ -263,7 +332,9 @@ const CarregamentoDetalhe = () => {
                 )}
               </div>
               <div>
-                <label className="text-base font-semibold block mb-0.5">Observações (opcional)</label>
+                <label className="text-base font-semibold block mb-0.5">
+                  Observações (opcional)
+                </label>
                 <Textarea
                   disabled={isFinalizada}
                   placeholder="Digite observações sobre esta etapa..."
@@ -271,7 +342,7 @@ const CarregamentoDetalhe = () => {
                   onChange={e => setStageObs(e.target.value)}
                 />
               </div>
-              <div className="flex justify-end pt-1">
+              <div className="flex justify-end pt-0">
                 <Button
                   disabled={!stageFile}
                   variant="primary"
@@ -296,58 +367,83 @@ const CarregamentoDetalhe = () => {
 
   const renderInformacoesProcesso = () => {
     const agendamento = carregamento?.agendamento;
-    const tempoTotalDecorrido =
-      processoInicio
-        ? `${Math.round((Date.now() - processoInicio.getTime()) / 1000 / 60)} min`
-        : "N/A";
-    const tempoTotalFinalizacao =
-      processoInicio
-        ? carregamento.status === "finalizado"
-          ? `${Math.round(((processoCriacao ? processoCriacao.getTime() : Date.now()) - processoInicio.getTime()) / 1000 / 60)} min`
-          : "-"
-        : "N/A";
+    const tempoTotalDecorrido = processoInicio
+      ? `${Math.round(
+          (Date.now() - processoInicio.getTime()) / 1000 / 60
+        )} min`
+      : "N/A";
+    const tempoTotalFinalizacao = processoInicio
+      ? carregamento.status === "finalizado"
+        ? `${Math.round(
+            ((processoCriacao
+              ? processoCriacao.getTime()
+              : Date.now()) -
+              processoInicio.getTime()) /
+              1000 /
+              60
+          )} min`
+        : "-"
+      : "N/A";
 
     return (
       <Card className="shadow-sm">
-        <CardContent className="p-5 grid grid-cols-1 gap-7 md:grid-cols-2 md:gap-10">
-          <div className="space-y-4">
+        <CardContent className="p-4 grid grid-cols-1 gap-6 md:grid-cols-2 md:gap-8">
+          <div className="space-y-3">
             <div>
-              <span className="block text-xs font-bold text-gray-400 uppercase mb-0.5 tracking-wider">Nome do cliente</span>
-              <span className="block text-lg font-semibold text-foreground break-all">{agendamento?.cliente?.nome || "N/A"}</span>
+              <span className={LABEL_STYLE}>Nome do cliente</span>
+              <span className={VALUE_STYLE}>
+                {agendamento?.cliente?.nome || "N/A"}
+              </span>
             </div>
             <div>
-              <span className="block text-xs font-bold text-gray-400 uppercase mb-0.5 tracking-wider">Quantidade</span>
-              <span className="block text-lg font-semibold text-foreground">{agendamento?.quantidade ?? "N/A"} toneladas</span>
+              <span className={LABEL_STYLE}>Quantidade</span>
+              <span className={VALUE_STYLE}>
+                {agendamento?.quantidade ?? "N/A"} toneladas
+              </span>
             </div>
             <div>
-              <span className="block text-xs font-bold text-gray-400 uppercase mb-0.5 tracking-wider">Placa caminhão</span>
-              <span className="block text-lg font-semibold text-foreground">{agendamento?.placa_caminhao || "N/A"}</span>
+              <span className={LABEL_STYLE}>Placa caminhão</span>
+              <span className={VALUE_STYLE}>
+                {agendamento?.placa_caminhao || "N/A"}
+              </span>
             </div>
             <div>
-              <span className="block text-xs font-bold text-gray-400 uppercase mb-0.5 tracking-wider">Motorista</span>
-              <span className="block text-lg font-semibold text-foreground">{agendamento?.motorista_nome || "N/A"}</span>
+              <span className={LABEL_STYLE}>Motorista</span>
+              <span className={VALUE_STYLE}>
+                {agendamento?.motorista_nome || "N/A"}
+              </span>
             </div>
             <div>
-              <span className="block text-xs font-bold text-gray-400 uppercase mb-0.5 tracking-wider">Doc. Motorista</span>
-              <span className="block text-lg font-semibold text-foreground">{agendamento?.motorista_documento || "N/A"}</span>
+              <span className={LABEL_STYLE}>Doc. Motorista</span>
+              <span className={VALUE_STYLE}>
+                {agendamento?.motorista_documento || "N/A"}
+              </span>
             </div>
             <div>
-              <span className="block text-xs font-bold text-gray-400 uppercase mb-0.5 tracking-wider">Número NF</span>
-              <span className="block text-lg font-semibold text-foreground">{carregamento.numero_nf || "N/A"}</span>
+              <span className={LABEL_STYLE}>Número NF</span>
+              <span className={VALUE_STYLE}>
+                {carregamento.numero_nf || "N/A"}
+              </span>
             </div>
           </div>
-          <div className="space-y-4">
+          <div className="space-y-3">
             <div>
-              <span className="block text-xs font-bold text-gray-400 uppercase mb-0.5 tracking-wider">Tempo em cada etapa</span>
-              <span className="block text-base font-medium text-muted-foreground">-- min (implementação futura)</span>
+              <span className={LABEL_STYLE}>Tempo em cada etapa</span>
+              <span className="block text-[.89rem] font-medium text-muted-foreground">
+                -- min (implementação futura)
+              </span>
             </div>
             <div>
-              <span className="block text-xs font-bold text-gray-400 uppercase mb-0.5 tracking-wider">Tempo total decorrido</span>
-              <span className="block text-lg font-semibold text-foreground">{tempoTotalDecorrido}</span>
+              <span className={LABEL_STYLE}>Tempo total decorrido</span>
+              <span className={`${VALUE_STYLE} text-[1.0rem]`}>
+                {tempoTotalDecorrido}
+              </span>
             </div>
             <div>
-              <span className="block text-xs font-bold text-gray-400 uppercase mb-0.5 tracking-wider">Tempo até finalização</span>
-              <span className="block text-lg font-semibold text-foreground">{tempoTotalFinalizacao}</span>
+              <span className={LABEL_STYLE}>Tempo até finalização</span>
+              <span className={`${VALUE_STYLE} text-[1.0rem]`}>
+                {tempoTotalFinalizacao}
+              </span>
             </div>
           </div>
         </CardContent>
@@ -380,7 +476,11 @@ const CarregamentoDetalhe = () => {
             <CardContent className="p-6">
               <div className="text-center text-destructive">
                 <p className="font-semibold">Erro ao carregar carregamento</p>
-                <p className="text-sm mt-2">{error instanceof Error ? error.message : "Erro desconhecido ou sem permissão"}</p>
+                <p className="text-sm mt-2">
+                  {error instanceof Error
+                    ? error.message
+                    : "Erro desconhecido ou sem permissão"}
+                </p>
               </div>
             </CardContent>
           </Card>
@@ -392,7 +492,7 @@ const CarregamentoDetalhe = () => {
   return (
     <div className="min-h-screen bg-background">
       <PageHeader title="Detalhes do Carregamento" />
-      <div className="container mx-auto px-3 md:px-8 pt-2 pb-10 gap-8 flex flex-col">
+      <div className="container mx-auto px-1 md:px-4 pt-1 pb-8 gap-4 flex flex-col max-w-[1050px]">
         {renderEtapasFluxo()}
         {renderCentralAtuacao()}
         {renderInformacoesProcesso()}
