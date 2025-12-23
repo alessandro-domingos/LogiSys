@@ -31,7 +31,6 @@ const formatarDataHora = (v?: string | null) => {
 const LABEL_STYLE = "block text-[0.75rem] text-gray-400 mb-1 tracking-wide font-normal select-none capitalize";
 const VALUE_STYLE = "block text-[0.98rem] font-semibold text-foreground break-all";
 
-// Circulo base: 36px, diminui 15% fica ~30.6px, vamos usar 31px.
 const CIRCLE_SIZE = 31;
 const ARROW_HEIGHT = 26;
 
@@ -173,7 +172,7 @@ const CarregamentoDetalhe = () => {
 
   // ----------- COMPONENTES DE LAYOUT -----------
 
-  // Componente de fluxo (setas acima dos círculos), grupo deslocado para baixo para não sobrepor
+  // Novo: Fluxo com setas em linha horizontal entre círculos
   const renderEtapasFluxo = () => (
     <div
       className="w-full flex flex-col"
@@ -191,48 +190,44 @@ const CarregamentoDetalhe = () => {
                 className="flex flex-col items-center flex-1 min-w-[90px] relative"
                 style={{}}
               >
-                {/* setas acima dos círculos, exceto o último, posicionada absoluta acima do círculo */}
-                {idx < ETAPAS.length - 1 && (
+                <div className="flex flex-row items-center justify-center w-full">
+                  {/* Círculo da etapa */}
                   <div
+                    className={`
+                      rounded-full flex items-center justify-center
+                      ${isFinalizada ? "bg-green-200 text-green-800" :
+                        isAtual ? "bg-primary text-white border-2 border-primary shadow-lg" :
+                          "bg-gray-200 text-gray-500"}
+                    `}
                     style={{
-                      position: "absolute",
-                      top: `-${ARROW_HEIGHT}px`,
-                      left: "50%",
-                      transform: "translateX(-50%)",
-                      width: "100%",
-                      display: "flex",
-                      justifyContent: "center"
+                      width: CIRCLE_SIZE,
+                      height: CIRCLE_SIZE,
+                      fontWeight: 700,
+                      fontSize: "1rem",
+                      boxShadow: isAtual ? "0 2px 6px 0 rgba(80,80,80,.15)" : "none",
                     }}
                   >
-                    <ArrowRight className="w-6 h-6 text-gray-400" />
+                    {isFinalizada ? <CheckCircle className="w-5 h-5" /> : etapaIndex}
                   </div>
-                )}
-                <div
-                  className={`
-                    rounded-full flex items-center justify-center
-                    ${isFinalizada ? "bg-green-200 text-green-800" :
-                      isAtual ? "bg-primary text-white border-2 border-primary shadow-lg" :
-                        "bg-gray-200 text-gray-500"}
-                  `}
-                  style={{
-                    width: CIRCLE_SIZE,
-                    height: CIRCLE_SIZE,
-                    fontWeight: 700,
-                    fontSize: "1rem",
-                    marginBottom: 3,
-                    boxShadow: isAtual ? "0 2px 6px 0 rgba(80,80,80,.15)" : "none",
-                  }}
-                >
-                  {isFinalizada ? <CheckCircle className="w-5 h-5" /> : etapaIndex}
+                  {/* Seta entre círculos, exceto após o último círculo */}
+                  {idx < ETAPAS.length - 1 && (
+                    <div className="flex items-center justify-center"
+                         style={{
+                           width: "calc(100% + 6px)",
+                           minWidth: "32px",
+                           maxWidth: "55px",
+                         }}
+                    >
+                      <ArrowRight className="w-6 h-6 text-gray-400 mx-auto" />
+                    </div>
+                  )}
                 </div>
+                {/* Labels e datas */}
                 <div
-                  className={
-                    "text-xs text-center leading-tight font-bold text-foreground"
-                    + (isAtual ? " text-primary" : "")
-                  }
+                  className="text-xs text-center leading-tight font-bold text-foreground"
                   style={{
                     minHeight: 32,
-                    marginTop: 2,
+                    marginTop: 5,
                     fontWeight: 700,
                   }}
                 >
