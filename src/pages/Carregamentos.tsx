@@ -72,6 +72,7 @@ const Carregamentos = () => {
     supabase.auth.getUser().then(({ data }) => {
       setUserId(data.user?.id ?? null);
     });
+
     const fetchRoles = async () => {
       if (!userId) return;
       const { data } = await supabase
@@ -80,25 +81,39 @@ const Carregamentos = () => {
         .eq("user_id", userId);
       if (data) setRoles(data.map((r) => r.role));
     };
-    const fetchVinculos = async () => {
-      if (!userId) return;
-      const { data: armazem } = await supabase
-        .from("armazens")
-        .select("id")
-        .eq("user_id", userId)
-        .single();
-      setArmazemId(armazem?.id ?? null);
-      const { data: cliente } = await supabase
-        .from("clientes")
-        .select("id")
-        .eq("user_id", userId)
-        .single();
-      setClienteId(cliente?.id ?? null);
-    };
+
     fetchRoles();
+  }, [userId]);
+
+  // Atualizado: só busca os vínculos de cliente/armazem SE necessário!
+  useEffect(() => {
+    const fetchVinculos = async () => {
+      if (!userId || roles.length === 0) return;
+      if (roles.includes("cliente")) {
+        const { data: cliente } = await supabase
+          .from("clientes")
+          .select("id")
+          .eq("user_id", userId)
+          .single();
+        setClienteId(cliente?.id ?? null);
+      } else {
+        setClienteId(null);
+      }
+      if (roles.includes("armazem")) {
+        const { data: armazem } = await supabase
+          .from("armazens")
+          .select("id")
+          .eq("user_id", userId)
+          .single();
+        setArmazemId(armazem?.id ?? null);
+      } else {
+        setArmazemId(null);
+      }
+    };
+
     fetchVinculos();
     // eslint-disable-next-line
-  }, [userId]);
+  }, [userId, roles]);
 
   // Query principal - filtro diretamente na supabase
   const { data: carregamentosData, isLoading, error } = useQuery({
@@ -148,8 +163,18 @@ const Carregamentos = () => {
       }
       return data;
     },
+    // A query só deve ser habilitada após:
+    //  - userId e roles definidos
+    //  - se for cliente/armazem, o respectivo id já buscado (ou null para outros)
+    enabled:
+      userId != null &&
+      roles.length > 0 &&
+      (
+        (!roles.includes("cliente") && !roles.includes("armazem")) // admin/logistica pode carregar sem esperar mais nada
+        || (roles.includes("cliente") && clienteId !== null)
+        || (roles.includes("armazem") && armazemId !== null)
+      ),
     refetchInterval: 30000,
-    enabled: userId != null && roles.length > 0,
   });
 
   const carregamentos = useMemo<CarregamentoItem[]>(() => {
@@ -243,7 +268,10 @@ const Carregamentos = () => {
     return found ? found.nome : `Etapa ${etapa_atual}`;
   };
 
-  if (isLoading || userId == null || roles.length === 0) {
+  if (isLoading || userId == null || roles.length === 0 ||
+    (roles.includes("cliente") && clienteId === null) ||
+    (roles.includes("armazem") && armazemId === null)
+  ) {
     return (
       <div className="min-h-screen bg-background">
         <PageHeader
