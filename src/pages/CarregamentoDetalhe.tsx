@@ -31,8 +31,8 @@ const formatarDataHora = (v?: string | null) => {
 const LABEL_STYLE = "block text-[0.75rem] text-gray-400 mb-1 tracking-wide font-normal select-none capitalize";
 const VALUE_STYLE = "block text-[0.98rem] font-semibold text-foreground break-all";
 
-// Circulo base: 36px, diminui 10% fica ~32.4px, vamos usar 33px.
-const CIRCLE_SIZE = 33;
+// Circulo base: 36px, diminui 15% fica ~30.6px, vamos usar 31px.
+const CIRCLE_SIZE = 31;
 const ARROW_HEIGHT = 26;
 
 const CarregamentoDetalhe = () => {
@@ -173,11 +173,11 @@ const CarregamentoDetalhe = () => {
 
   // ----------- COMPONENTES DE LAYOUT -----------
 
-  // Componente de fluxo (setas acima dos círculos), todo o grupo deslocado para baixo em 30% da seta.
+  // Componente de fluxo (setas acima dos círculos), grupo deslocado para baixo para não sobrepor
   const renderEtapasFluxo = () => (
     <div
       className="w-full flex flex-col"
-      style={{ marginTop: `${Math.round(ARROW_HEIGHT * 1.3)}px`, marginBottom: "28px" }}
+      style={{ marginTop: `${ARROW_HEIGHT + 8}px`, marginBottom: "28px" }}
     >
       <div className="relative">
         <div className="flex items-end justify-between w-full max-w-4xl mx-auto relative">
@@ -191,7 +191,7 @@ const CarregamentoDetalhe = () => {
                 className="flex flex-col items-center flex-1 min-w-[90px] relative"
                 style={{}}
               >
-                {/* Setas acima dos círculos, exceto último */}
+                {/* setas acima dos círculos, exceto o último, posicionada absoluta acima do círculo */}
                 {idx < ETAPAS.length - 1 && (
                   <div
                     style={{
@@ -218,7 +218,7 @@ const CarregamentoDetalhe = () => {
                     width: CIRCLE_SIZE,
                     height: CIRCLE_SIZE,
                     fontWeight: 700,
-                    fontSize: "1.04rem",
+                    fontSize: "1rem",
                     marginBottom: 3,
                     boxShadow: isAtual ? "0 2px 6px 0 rgba(80,80,80,.15)" : "none",
                   }}
@@ -233,7 +233,7 @@ const CarregamentoDetalhe = () => {
                   style={{
                     minHeight: 32,
                     marginTop: 2,
-                    fontWeight: "bold",
+                    fontWeight: 700,
                   }}
                 >
                   {etapa.nome}
