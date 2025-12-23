@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, CheckCircle, FilePlus, ArrowRight } from "lucide-react";
+import { Loader2, CheckCircle, FilePlus } from "lucide-react";
 
 const ETAPAS = [
   { id: 1, nome: "Chegada" },
@@ -19,7 +19,6 @@ const ETAPAS = [
   { id: 6, nome: "Finalizado" },
 ];
 
-// Helper para formatar data/hora
 const formatarDataHora = (v?: string | null) => {
   if (!v) return "-";
   const d = new Date(v);
@@ -30,27 +29,33 @@ const formatarDataHora = (v?: string | null) => {
   );
 };
 
-const getEtapaLabel = (etapa_id: number) => {
-  const found = ETAPAS.find(e => e.id === etapa_id);
-  return found ? found.nome : `Etapa ${etapa_id}`;
-};
-
 const getStatusLabel = (status: string | null) => {
   switch (status) {
-    case "aguardando": return "Aguardando início";
-    case "em_andamento": return "Em andamento";
-    case "finalizado": return "Finalizado";
-    case "cancelado": return "Cancelado";
-    default: return status || "";
+    case "aguardando":
+      return "Aguardando início";
+    case "em_andamento":
+      return "Em andamento";
+    case "finalizado":
+      return "Finalizado";
+    case "cancelado":
+      return "Cancelado";
+    default:
+      return status || "";
   }
 };
+
 const getStatusBadgeVariant = (status: string | null) => {
   switch (status) {
-    case "aguardando": return "secondary";
-    case "em_andamento": return "default";
-    case "finalizado": return "default";
-    case "cancelado": return "outline";
-    default: return "outline";
+    case "aguardando":
+      return "secondary";
+    case "em_andamento":
+      return "default";
+    case "finalizado":
+      return "default";
+    case "cancelado":
+      return "outline";
+    default:
+      return "outline";
   }
 };
 
@@ -169,54 +174,45 @@ const CarregamentoDetalhe = () => {
   const processoInicio = carregamento?.data_chegada ? new Date(carregamento.data_chegada) : null;
   const processoCriacao = carregamento?.created_at ? new Date(carregamento.created_at) : null;
 
-  // ----------- COMPONENTES DE LAYOUT (NOVOS) -----------
+  // ----------- COMPONENTES DE LAYOUT -----------
 
-  // Fluxo de etapas (100%, setas entre etapas, datas exibidas, textos aprimorados)
+  // Fluxo de etapas centralizado, sem linhas/setas, perfeitamente alinhados
   const renderEtapasFluxo = () => (
     <div className="w-full py-7 flex flex-col">
-      <div className="flex items-center w-full justify-center gap-0 md:gap-0 px-2 overflow-x-auto">
+      <div className="flex flex-row items-end justify-center gap-0 md:gap-0 px-2 overflow-x-auto">
         {ETAPAS.map((etapa, idx) => {
           const etapaIndex = etapa.id;
           const isFinalizada = (carregamento.etapa_atual ?? 0) + 1 > etapaIndex;
           const isAtual = selectedEtapa === etapaIndex;
-          // Para o visual: checa se etapa selecionada/atual
           return (
             <div
               key={etapa.id}
-              className="flex-1 flex flex-col items-center min-w-[120px] max-w-[130px] cursor-pointer group"
+              className="flex flex-col items-center min-w-[100px] mx-2 cursor-pointer group transition"
               onClick={() => setSelectedEtapa(etapaIndex)}
               style={{ zIndex: 10 }}
             >
-              <div className="flex items-center w-full">
-                <div
-                  className={`
-                    z-10 w-11 h-11 flex items-center justify-center rounded-full border-2
-                    font-bold text-lg shadow
-                    transition
-                    ${isFinalizada
-                      ? "bg-green-200 border-green-600 text-green-800"
-                      : isAtual
-                        ? "bg-primary border-primary text-white scale-110 shadow-lg"
-                        : "bg-background border-muted-foreground text-muted-foreground group-hover:text-primary/80"
-                    }
-                  `}
-                >
-                  {isFinalizada
-                    ? <CheckCircle className="w-7 h-7" />
-                    : etapaIndex}
-                </div>
-                {/* Seta após exceto último */}
-                {idx < ETAPAS.length - 1 && (
-                  <div className="flex-1 h-0.5 bg-muted-foreground mx-2 relative min-w-[24px]">
-                    <ArrowRight className="absolute -right-2 top-[-11px] w-7 h-7 text-gray-300 dark:text-gray-700" />
-                  </div>
-                )}
+              <div
+                className={`
+                  w-11 h-11 flex items-center justify-center rounded-full border-2
+                  font-bold text-lg shadow
+                  transition
+                  ${isFinalizada
+                    ? "bg-green-200 border-green-600 text-green-800"
+                    : isAtual
+                      ? "bg-primary border-primary text-white scale-110 shadow-lg"
+                      : "bg-background border-muted-foreground text-muted-foreground group-hover:text-primary/80"
+                  }
+                `}
+              >
+                {isFinalizada
+                  ? <CheckCircle className="w-7 h-7" />
+                  : etapaIndex}
               </div>
-              <div className="mt-2 text-xs font-semibold text-center max-w-[120px] text-foreground">
+              <div className="mt-2 text-xs font-semibold text-center max-w-[97px] text-foreground">
                 {etapa.nome}
               </div>
               <div className="mt-1 text-[12px] text-muted-foreground font-medium min-h-[19px]">
-                {/* Exemplo fixo (substitua pelo timestamp real da etapa quando implementar) */}
+                {/* Exemplo: só real para chegada por enquanto */}
                 {etapaIndex === 1 && carregamento.data_chegada
                   ? formatarDataHora(carregamento.data_chegada)
                   : "-"}
@@ -297,7 +293,6 @@ const CarregamentoDetalhe = () => {
   };
 
   const renderInformacoesProcesso = () => {
-    // Exemplo de tempos e estatísticas para layout  
     const agendamento = carregamento?.agendamento;
     const tempoTotalDecorrido =
       processoInicio
@@ -337,7 +332,6 @@ const CarregamentoDetalhe = () => {
     );
   };
 
-  // ------- RENDER --------
   if (
     isLoading ||
     userId == null ||
