@@ -169,50 +169,49 @@ const CarregamentoDetalhe = () => {
 
   // ----------- COMPONENTES DE LAYOUT -----------
 
-  // Componente de fluxo (idêntico ao da página antiga, com setas entre círculos)
+  // Componente de fluxo (setas acima dos círculos)
   const renderEtapasFluxo = () => (
     <div className="w-full pt-2 pb-6 flex flex-col">
-      <div className="flex items-center justify-between w-full max-w-4xl mx-auto">
+      <div className="flex items-end justify-between w-full max-w-4xl mx-auto">
         {ETAPAS.map((etapa, idx) => {
           const etapaIndex = etapa.id;
           const isFinalizada = (carregamento.etapa_atual ?? 0) + 1 > etapaIndex;
           const isAtual = selectedEtapa === etapaIndex;
 
           return (
-            <div key={etapa.id} className="flex flex-row items-start flex-1 min-w-[90px]">
-              <div className="flex flex-col items-center">
-                <div
-                  className={`
-                    rounded-full flex items-center justify-center
-                    ${isFinalizada ? "bg-green-200 text-green-800" :
-                      isAtual ? "bg-primary text-white border-2 border-primary shadow-lg" :
-                        "bg-gray-200 text-gray-500"}
-                  `}
-                  style={{
-                    width: 36,
-                    height: 36,
-                    fontWeight: 700,
-                    fontSize: "1.1rem",
-                    marginBottom: 3,
-                    boxShadow: isAtual ? "0 2px 6px 0 rgba(80,80,80,.15)" : "none",
-                  }}
-                >
-                  {isFinalizada ? <CheckCircle className="w-6 h-6" /> : etapaIndex}
-                </div>
-                <div className="text-xs text-center text-foreground leading-tight" style={{ minHeight: 32, fontWeight: isAtual ? 700 : 500, marginTop: 2 }}>
-                  {etapa.nome}
-                </div>
-                <div className="text-[11px] text-center text-muted-foreground" style={{ marginTop: 1 }}>
-                  {etapaIndex === 1 && carregamento.data_chegada
-                    ? formatarDataHora(carregamento.data_chegada)
-                    : "-"}
-                </div>
-              </div>
+            <div key={etapa.id} className="flex flex-col items-center flex-1 min-w-[90px] relative">
+              {/* seta entre círculos, exceto o último, posicionada acima do círculo */}
               {idx < ETAPAS.length - 1 && (
-                <div className="flex items-center justify-center h-full">
-                  <ArrowRight className="w-7 h-7 mx-[2px] mt-[4px] text-gray-400" />
+                <div style={{ position: "absolute", top: -24, left: "50%", transform: "translateX(-50%)" }}>
+                  <ArrowRight className="w-6 h-6 text-gray-400" />
                 </div>
               )}
+              <div
+                className={`
+                  rounded-full flex items-center justify-center
+                  ${isFinalizada ? "bg-green-200 text-green-800" :
+                    isAtual ? "bg-primary text-white border-2 border-primary shadow-lg" :
+                      "bg-gray-200 text-gray-500"}
+                `}
+                style={{
+                  width: 36,
+                  height: 36,
+                  fontWeight: 700,
+                  fontSize: "1.1rem",
+                  marginBottom: 3,
+                  boxShadow: isAtual ? "0 2px 6px 0 rgba(80,80,80,.15)" : "none",
+                }}
+              >
+                {isFinalizada ? <CheckCircle className="w-6 h-6" /> : etapaIndex}
+              </div>
+              <div className="text-xs text-center text-foreground leading-tight" style={{ minHeight: 32, fontWeight: isAtual ? 700 : 500, marginTop: 2 }}>
+                {etapa.nome}
+              </div>
+              <div className="text-[11px] text-center text-muted-foreground" style={{ marginTop: 1 }}>
+                {etapaIndex === 1 && carregamento.data_chegada
+                  ? formatarDataHora(carregamento.data_chegada)
+                  : "-"}
+              </div>
             </div>
           );
         })}
