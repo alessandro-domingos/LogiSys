@@ -1,4 +1,13 @@
-// ...imports (iguais aos seus)
+import { useEffect, useState } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { PageHeader } from "@/components/PageHeader";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Loader2, CheckCircle, FilePlus, ArrowRight } from "lucide-react";
 
 const ETAPAS = [
   { id: 1, nome: "Chegada", campoObs: "observacao_chegada", campoData: "data_chegada", campoUrl: "url_chegada" },
@@ -9,22 +18,170 @@ const ETAPAS = [
   { id: 6, nome: "Finalizado" }
 ];
 
-// ...formatarDataHora, LABEL_STYLE, VALUE_STYLE, ARROW_HEIGHT (igual)
+const formatarDataHora = (v?: string | null) => {
+  if (!v) return "-";
+  const d = new Date(v);
+  return (
+    d.toLocaleDateString("pt-BR") +
+    " " +
+    d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
+  );
+};
+
+const LABEL_STYLE = "block text-[0.75rem] text-gray-400 mb-1 tracking-wide font-normal select-none capitalize";
+const VALUE_STYLE = "block text-[0.98rem] font-semibold text-foreground break-all";
+const ARROW_HEIGHT = 26;
 
 const CarregamentoDetalhe = () => {
-  // ...hooks de user/roles/clienteId/armazemId/selectedEtapa, iguais ao seu código
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
 
-  // ...fetch carregamento com observacao_chegada...url_xml (igual ao sugerido antes)
-  
-  // ...permissão & redirecionamento (igual)
+  const [userId, setUserId] = useState<string | null>(null);
+  const [roles, setRoles] = useState<string[]>([]);
+  const [clienteId, setClienteId] = useState<string | null>(null);
+  const [armazemId, setArmazemId] = useState<string | null>(null);
+  const [stageFile, setStageFile] = useState<File | null>(null);
+  const [stageXml, setStageXml] = useState<File | null>(null); // Para etapa 5
+  const [stageObs, setStageObs] = useState("");
+  const [selectedEtapa, setSelectedEtapa] = useState<number | null>(null);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      setUserId(data.user?.id ?? null);
+    });
+
+    const fetchRoles = async () => {
+      if (!userId) return;
+      const { data } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", userId);
+      if (data) setRoles(data.map((r) => r.role));
+    };
+    fetchRoles();
+  }, [userId]);
+
+  useEffect(() => {
+    const fetchVinculos = async () => {
+      if (!userId || roles.length === 0) return;
+      if (roles.includes("cliente")) {
+        const { data: cliente } = await supabase
+          .from("clientes")
+          .select("id")
+          .eq("user_id", userId)
+          .single();
+        setClienteId(cliente?.id ?? null);
+      } else {
+        setClienteId(null);
+      }
+      if (roles.includes("armazem")) {
+        const { data: armazem } = await supabase
+          .from("armazens")
+          .select("id")
+          .eq("user_id", userId)
+          .single();
+        setArmazemId(armazem?.id ?? null);
+      } else {
+        setArmazemId(null);
+      }
+    };
+    fetchVinculos();
+    // eslint-disable-next-line
+  }, [userId, roles]);
+
+  const { data: carregamento, isLoading, error } = useQuery({
+    queryKey: ["carregamento-detalhe", id, clienteId, armazemId, roles],
+    queryFn: async () => {
+      let query = supabase
+        .from("carregamentos")
+        .select(
+          `
+        id,
+        status,
+        etapa_atual,
+        numero_nf,
+        data_chegada,
+        created_at,
+        cliente_id,
+        armazem_id,
+        observacao_chegada,
+        observacao_inicio,
+        observacao_carregando,
+        observacao_finalizacao,
+        observacao_nf,
+        url_chegada,
+        url_inicio,
+        url_carregando,
+        url_finalizacao,
+        url_nota_fiscal,
+        url_xml,
+        data_inicio_carregamento,
+        data_carregando,
+        data_finalizacao,
+        data_nf,
+        agendamento:agendamentos!carregamentos_agendamento_id_fkey (
+          id,
+          data_retirada,
+          horario,
+          quantidade,
+          cliente:clientes!agendamentos_cliente_id_fkey (
+            nome
+          ),
+          placa_caminhao,
+          motorista_nome,
+          motorista_documento
+        )
+      `
+        )
+        .eq("id", id)
+        .single();
+
+      const { data, error } = await query;
+      if (error) throw error;
+      return data;
+    },
+    enabled:
+      !!id &&
+      userId != null &&
+      roles.length > 0 &&
+      ((!roles.includes("cliente") && !roles.includes("armazem")) ||
+        (roles.includes("cliente") && clienteId !== null) ||
+        (roles.includes("armazem") && armazemId !== null)),
+  });
+
+  useEffect(() => {
+    if (carregamento?.etapa_atual != null) {
+      setSelectedEtapa(carregamento.etapa_atual + 1);
+    }
+  }, [carregamento]);
+
+  useEffect(() => {
+    if (
+      !isLoading &&
+      carregamento &&
+      userId &&
+      roles.length > 0
+    ) {
+      if (
+        !(
+          roles.includes("admin") ||
+          roles.includes("logistica") ||
+          (roles.includes("cliente") && clienteId && carregamento.cliente_id === clienteId) ||
+          (roles.includes("armazem") && armazemId && carregamento.armazem_id === armazemId)
+        )
+      ) {
+        navigate("/carregamentos");
+      }
+    }
+    // eslint-disable-next-line
+  }, [isLoading, carregamento, userId, roles, clienteId, armazemId, navigate]);
 
   // Funções auxiliares de permissão
-  const isArmazem = roles.includes("armazem");
-  const isCliente = roles.includes("cliente");
+  const isArmazem = Array.isArray(roles) && roles.includes("armazem");
+  const isCliente = Array.isArray(roles) && roles.includes("cliente");
 
   // Controle de clique nas etapas do fluxo
   const handleClickEtapa = (etapaId: number) => {
-    // Pode visualizar etapas <= etapa_atual+1 (armazem), ou <= etapa_atual (cliente)
     if (isArmazem && etapaId <= (carregamento.etapa_atual ?? 0) + 1) setSelectedEtapa(etapaId);
     else if (isCliente && etapaId <= (carregamento.etapa_atual ?? 0)) setSelectedEtapa(etapaId);
     else if (!isArmazem && !isCliente) setSelectedEtapa(etapaId); // admin/logistica, livre
@@ -37,17 +194,16 @@ const CarregamentoDetalhe = () => {
         <div className="flex items-end justify-between w-full max-w-4xl mx-auto relative">
           {ETAPAS.map((etapa, idx) => {
             const etapaIndex = etapa.id;
-            const isFinalizada = (carregamento.etapa_atual ?? 0) >= etapaIndex;
+            const isFinalizada = (carregamento?.etapa_atual ?? 0) >= etapaIndex;
             const isAtual = selectedEtapa === etapaIndex;
             const isClicavel = 
-              (isArmazem && etapaIndex <= (carregamento.etapa_atual ?? 0) + 1) ||
-              (isCliente && etapaIndex <= (carregamento.etapa_atual ?? 0)) ||
-              (!isArmazem && !isCliente) // admin/logistica
-            ;
+              (isArmazem && etapaIndex <= (carregamento?.etapa_atual ?? 0) + 1) ||
+              (isCliente && etapaIndex <= (carregamento?.etapa_atual ?? 0)) ||
+              (!isArmazem && !isCliente);
             return (
               <div
                 key={etapa.id}
-                className={`flex flex-col items-center flex-1 min-w-[90px] relative transition cursor-pointer ${isClicavel ? "hover:brightness-110" : "opacity-60 cursor-not-allowed"}`}
+                className={`flex flex-col items-center flex-1 min-w-[90px] relative transition ${isClicavel ? "cursor-pointer hover:brightness-110" : "opacity-60 cursor-not-allowed"}`}
                 onClick={() => isClicavel && setSelectedEtapa(etapaIndex)}
               >
                 {idx < ETAPAS.length - 1 && (
@@ -81,7 +237,7 @@ const CarregamentoDetalhe = () => {
 
   // ----------- ÁREA DE REGISTROS/INFO DA ETAPA -----------
   const renderAreaRegistro = () => {
-    const etapaIdx = selectedEtapa ?? (carregamento.etapa_atual ?? 1);
+    const etapaIdx = selectedEtapa ?? (carregamento?.etapa_atual ?? 1);
     const etapa = ETAPAS.find(e => e.id === etapaIdx);
     if (!etapa || etapa.id === 6)
       return (
@@ -92,9 +248,8 @@ const CarregamentoDetalhe = () => {
         </Card>
       );
 
-    // Pega campos nos dados
-    const campoObs = (etapa as any).campoObs; // ex: observacao_chegada
-    const campoData = (etapa as any).campoData
+    const campoObs = (etapa as any).campoObs;
+    const campoData = (etapa as any).campoData;
     const campoUrl = (etapa as any).campoUrl;
     const campoXml = (etapa as any).campoXml;
 
@@ -103,13 +258,10 @@ const CarregamentoDetalhe = () => {
     const urlVal = carregamento?.[campoUrl] ?? "";
     const urlXml = campoXml ? carregamento?.[campoXml] ?? "" : "";
 
-    // Etapa já finalizada (<= etapa_atual)
-    const isFinalizada = etapa.id <= (carregamento.etapa_atual ?? 0);
-    // Etapa atual liberada para armazém (edição)
-    const isAtivaArmazem = isArmazem && etapa.id === (carregamento.etapa_atual ?? 0) + 1;
+    const isFinalizada = etapa.id <= (carregamento?.etapa_atual ?? 0);
+    const isAtivaArmazem = isArmazem && etapa.id === (carregamento?.etapa_atual ?? 0) + 1;
 
     if (isFinalizada) {
-      // Exibe anexo e observação, permite baixar se existir
       return (
         <Card className="mb-8 shadow-sm">
           <CardContent className="p-4 space-y-5">
@@ -147,7 +299,6 @@ const CarregamentoDetalhe = () => {
     }
 
     if (isAtivaArmazem) {
-      // Exibição modo edição para armazém
       return (
         <Card className="mb-8 shadow-sm">
           <CardContent className="p-4 space-y-6">
@@ -169,6 +320,7 @@ const CarregamentoDetalhe = () => {
                     type="file"
                     accept=".xml"
                     className="w-full"
+                    onChange={e => setStageXml(e.target.files?.[0] ?? null)}
                   />
                 </>
               )}
@@ -182,14 +334,17 @@ const CarregamentoDetalhe = () => {
               />
             </div>
             <div className="flex justify-end pt-2">
-              <Button disabled={!stageFile} variant="primary" size="lg">{etapa.id === 5 ? "Finalizar" : "Próxima Etapa"}</Button>
+              <Button disabled={
+                etapa.id === 5
+                  ? !(stageFile && stageXml)
+                  : !stageFile
+              } variant="primary" size="lg">{etapa.id === 5 ? "Finalizar" : "Próxima Etapa"}</Button>
             </div>
           </CardContent>
         </Card>
       );
     }
 
-    // Etapa futura (não pode editar) ou cliente vendo etapa pendente
     return (
       <Card className="mb-8 shadow-sm">
         <CardContent className="p-6 text-center text-gray-400">
@@ -201,9 +356,129 @@ const CarregamentoDetalhe = () => {
     );
   };
 
-  // ... renderInformacoesProcesso igual
+  const renderInformacoesProcesso = () => {
+    const agendamento = carregamento?.agendamento;
+    const processoInicio = carregamento?.data_chegada ? new Date(carregamento.data_chegada) : null;
+    const processoCriacao = carregamento?.created_at ? new Date(carregamento.created_at) : null;
+    const tempoTotalDecorrido = processoInicio
+      ? `${Math.round((Date.now() - processoInicio.getTime()) / 1000 / 60)} min`
+      : "N/A";
+    const tempoTotalFinalizacao = processoInicio
+      ? carregamento.status === "finalizado"
+        ? `${Math.round(
+            ((processoCriacao
+              ? processoCriacao.getTime()
+              : Date.now()) -
+              processoInicio.getTime()) /
+              1000 /
+              60
+          )} min`
+        : "-"
+      : "N/A";
 
-  // ...loader/erro igual
+    return (
+      <Card className="shadow-sm">
+        <CardContent className="p-4 grid grid-cols-1 gap-6 md:grid-cols-2 md:gap-8">
+          <div className="space-y-3">
+            <div>
+              <span className={LABEL_STYLE}>Nome do cliente</span>
+              <span className={VALUE_STYLE}>
+                {agendamento?.cliente?.nome || "N/A"}
+              </span>
+            </div>
+            <div>
+              <span className={LABEL_STYLE}>Quantidade</span>
+              <span className={VALUE_STYLE}>
+                {agendamento?.quantidade ?? "N/A"} toneladas
+              </span>
+            </div>
+            <div>
+              <span className={LABEL_STYLE}>Placa caminhão</span>
+              <span className={VALUE_STYLE}>
+                {agendamento?.placa_caminhao || "N/A"}
+              </span>
+            </div>
+            <div>
+              <span className={LABEL_STYLE}>Motorista</span>
+              <span className={VALUE_STYLE}>
+                {agendamento?.motorista_nome || "N/A"}
+              </span>
+            </div>
+            <div>
+              <span className={LABEL_STYLE}>Doc. Motorista</span>
+              <span className={VALUE_STYLE}>
+                {agendamento?.motorista_documento || "N/A"}
+              </span>
+            </div>
+            <div>
+              <span className={LABEL_STYLE}>Número nf</span>
+              <span className={VALUE_STYLE}>
+                {carregamento?.numero_nf || "N/A"}
+              </span>
+            </div>
+          </div>
+          <div className="space-y-3">
+            <div>
+              <span className={LABEL_STYLE}>Tempo em cada etapa</span>
+              <span className="block text-[.88rem] font-medium text-muted-foreground">
+                -- min (implementação futura)
+              </span>
+            </div>
+            <div>
+              <span className={LABEL_STYLE}>Tempo total decorrido</span>
+              <span className={`${VALUE_STYLE} text-[0.97rem]`}>
+                {tempoTotalDecorrido}
+              </span>
+            </div>
+            <div>
+              <span className={LABEL_STYLE}>Tempo até finalização</span>
+              <span className={`${VALUE_STYLE} text-[0.97rem]`}>
+                {tempoTotalFinalizacao}
+              </span>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  };
+
+  if (
+    isLoading ||
+    userId == null ||
+    roles.length === 0 ||
+    (roles.includes("cliente") && clienteId === null) ||
+    (roles.includes("armazem") && armazemId === null)
+  ) {
+    return (
+      <div className="min-h-screen bg-background">
+        <PageHeader title="Detalhes do Carregamento" />
+        <div className="flex justify-center items-center h-40">
+          <Loader2 className="animate-spin h-8 w-8 text-primary" />
+        </div>
+      </div>
+    );
+  }
+  if (error || !carregamento) {
+    return (
+      <div className="min-h-screen bg-background">
+        <PageHeader title="Detalhes do Carregamento" />
+        <div className="container mx-auto py-12">
+          <Card className="border-destructive">
+            <CardContent className="p-6">
+              <div className="text-center text-destructive">
+                <p className="font-semibold">Erro ao carregar carregamento</p>
+                <p className="text-sm mt-2">
+                  {error instanceof Error
+                    ? error.message
+                    : "Erro desconhecido ou sem permissão"}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
