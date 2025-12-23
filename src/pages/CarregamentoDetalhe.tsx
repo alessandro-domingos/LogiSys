@@ -31,6 +31,8 @@ const formatarDataHora = (v?: string | null) => {
 const LABEL_STYLE = "block text-[0.75rem] text-gray-400 mb-1 tracking-wide font-normal select-none capitalize";
 const VALUE_STYLE = "block text-[0.98rem] font-semibold text-foreground break-all";
 
+// Circulo base: 36px, diminui 10% fica ~32.4px, vamos usar 33px.
+const CIRCLE_SIZE = 33;
 const ARROW_HEIGHT = 26;
 
 const CarregamentoDetalhe = () => {
@@ -171,11 +173,11 @@ const CarregamentoDetalhe = () => {
 
   // ----------- COMPONENTES DE LAYOUT -----------
 
-  // Componente de fluxo (setas acima dos círculos), todo o grupo deslocado para baixo para não sobrepor com margem negativa no wrapper
+  // Componente de fluxo (setas acima dos círculos), todo o grupo deslocado para baixo em 30% da seta.
   const renderEtapasFluxo = () => (
     <div
       className="w-full flex flex-col"
-      style={{ marginTop: `${ARROW_HEIGHT + 8}px`, marginBottom: "28px" }}
+      style={{ marginTop: `${Math.round(ARROW_HEIGHT * 1.3)}px`, marginBottom: "28px" }}
     >
       <div className="relative">
         <div className="flex items-end justify-between w-full max-w-4xl mx-auto relative">
@@ -189,14 +191,14 @@ const CarregamentoDetalhe = () => {
                 className="flex flex-col items-center flex-1 min-w-[90px] relative"
                 style={{}}
               >
-                {/* seta entre círculos, exceto o último, posicionada ABSOLUTA acima do círculo */}
+                {/* Setas acima dos círculos, exceto último */}
                 {idx < ETAPAS.length - 1 && (
                   <div
                     style={{
                       position: "absolute",
                       top: `-${ARROW_HEIGHT}px`,
                       left: "50%",
-                      transform: "translateX(0)",
+                      transform: "translateX(-50%)",
                       width: "100%",
                       display: "flex",
                       justifyContent: "center"
@@ -213,25 +215,25 @@ const CarregamentoDetalhe = () => {
                         "bg-gray-200 text-gray-500"}
                   `}
                   style={{
-                    width: 36,
-                    height: 36,
+                    width: CIRCLE_SIZE,
+                    height: CIRCLE_SIZE,
                     fontWeight: 700,
-                    fontSize: "1.1rem",
+                    fontSize: "1.04rem",
                     marginBottom: 3,
                     boxShadow: isAtual ? "0 2px 6px 0 rgba(80,80,80,.15)" : "none",
                   }}
                 >
-                  {isFinalizada ? <CheckCircle className="w-6 h-6" /> : etapaIndex}
+                  {isFinalizada ? <CheckCircle className="w-5 h-5" /> : etapaIndex}
                 </div>
                 <div
                   className={
-                    "text-xs text-center leading-tight " +
-                    (isAtual ? "text-primary" : "text-foreground")
+                    "text-xs text-center leading-tight font-bold text-foreground"
+                    + (isAtual ? " text-primary" : "")
                   }
                   style={{
                     minHeight: 32,
-                    fontWeight: 400,
                     marginTop: 2,
+                    fontWeight: "bold",
                   }}
                 >
                   {etapa.nome}
