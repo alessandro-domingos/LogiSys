@@ -31,25 +31,34 @@ const CarregamentoDetalhe = () => {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
-  // Permissão/usuário: só para identificar o tipo e pegar o id do cliente/armazem se for o caso!
+  // Permissão/usuário
   const [userId, setUserId] = useState<string | null>(null);
   const [roles, setRoles] = useState<string[]>([]);
   const [clienteId, setClienteId] = useState<string | null>(null);
   const [armazemId, setArmazemId] = useState<string | null>(null);
 
-  // Descobre quem está logado e seu papel
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null));
-    const fetchRoleAndFK = async () => {
+    supabase.auth.getUser().then(({ data }) => {
+      setUserId(data.user?.id ?? null);
+    });
+
+    const fetchRoles = async () => {
       if (!userId) return;
-      const { data: roleData } = await supabase
+      const { data } = await supabase
         .from("user_roles")
         .select("role")
         .eq("user_id", userId);
+      if (data) setRoles(data.map((r) => r.role));
+    };
 
-      if (roleData) setRoles(roleData.map((r) => r.role));
-      // Só busca cliente_id se user for cliente
-      if (roleData?.some((r) => r.role === "cliente")) {
+    fetchRoles();
+  }, [userId]);
+
+  // Corrigido: só busca os vínculos de cliente/armazem SE necessário!
+  useEffect(() => {
+    const fetchVinculos = async () => {
+      if (!userId || roles.length === 0) return;
+      if (roles.includes("cliente")) {
         const { data: cliente } = await supabase
           .from("clientes")
           .select("id")
@@ -59,8 +68,7 @@ const CarregamentoDetalhe = () => {
       } else {
         setClienteId(null);
       }
-      // Só busca armazem_id se user for armazem
-      if (roleData?.some((r) => r.role === "armazem")) {
+      if (roles.includes("armazem")) {
         const { data: armazem } = await supabase
           .from("armazens")
           .select("id")
@@ -71,14 +79,23 @@ const CarregamentoDetalhe = () => {
         setArmazemId(null);
       }
     };
-    fetchRoleAndFK();
+
+    fetchVinculos();
     // eslint-disable-next-line
-  }, [userId]);
+  }, [userId, roles]);
 
   // Buscar detalhes do carregamento
   const { data: carregamento, isLoading, error, refetch } = useQuery({
-    queryKey: ["carregamento-detalhe", id],
-    enabled: !!id,
+    queryKey: ["carregamento-detalhe", id, clienteId, armazemId, roles],
+    enabled:
+      !!id &&
+      userId != null &&
+      roles.length > 0 &&
+      (
+        (!roles.includes("cliente") && !roles.includes("armazem"))
+        || (roles.includes("cliente") && clienteId !== null)
+        || (roles.includes("armazem") && armazemId !== null)
+      ),
     queryFn: async () => {
       const { data, error } = await supabase
         .from("carregamentos")
@@ -123,7 +140,8 @@ const CarregamentoDetalhe = () => {
     // eslint-disable-next-line
   }, [isLoading, carregamento, podeEditar]);
 
-  // Demais controles/reuso...
+  // ... Demais controles (inalterados) ...
+
   const [obs, setObs] = useState("");
   const [foto, setFoto] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -267,7 +285,6 @@ const CarregamentoDetalhe = () => {
     onError: () => setUploadingXML(false),
   });
 
-  // Observação
   const handleObsSave = async () => {
     let col: string | null = null;
     switch (etapaAtual) {
@@ -286,7 +303,6 @@ const CarregamentoDetalhe = () => {
     if (!error) refetch();
   };
 
-  // Avançar etapa
   const avancarEtapa = async () => {
     const { error } = await supabase
       .from("carregamentos")
@@ -318,7 +334,14 @@ const CarregamentoDetalhe = () => {
   const nfEnviada = Boolean(documentosPorTipo["nf"]);
   const xmlEnviado = Boolean(documentosPorTipo["xml"]);
 
-  if (isLoading || !carregamento || userId == null || roles.length === 0) {
+  if (
+    isLoading ||
+    !carregamento ||
+    userId == null ||
+    roles.length === 0 ||
+    (roles.includes("cliente") && clienteId === null) ||
+    (roles.includes("armazem") && armazemId === null)
+  ) {
     return (
       <div className="min-h-screen bg-background">
         <PageHeader title="Detalhes do Carregamento" />
