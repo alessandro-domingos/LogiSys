@@ -198,6 +198,30 @@ const CarregamentoDetalhe = () => {
             const isSelected = selectedEtapa === etapaIndex;
             const podeClicar = true; // Todas as etapas são clicáveis para visualização
             
+            // Lógica visual melhorada
+            let circleClasses = "rounded-full flex items-center justify-center transition-all";
+            let shadowStyle = "none";
+            
+            if (isSelected && !isAtual) {
+              // Etapa selecionada (diferente da atual): borda azul grossa + fundo branco
+              circleClasses += " bg-white text-primary border-4 border-primary font-bold";
+              shadowStyle = "0 2px 8px 0 rgba(59, 130, 246, 0.3)";
+            } else if (isAtual) {
+              // Etapa atual: azul
+              circleClasses += " bg-blue-500 text-white";
+              shadowStyle = isSelected ? "0 2px 8px 0 rgba(59, 130, 246, 0.4)" : "none";
+            } else if (isFinalizada) {
+              // Etapa finalizada: verde
+              circleClasses += " bg-green-500 text-white";
+            } else {
+              // Etapa futura: cinza
+              circleClasses += " bg-gray-200 text-gray-600";
+            }
+            
+            if (podeClicar) {
+              circleClasses += " cursor-pointer hover:scale-105";
+            }
+            
             return (
               <div
                 key={etapa.id}
@@ -220,21 +244,13 @@ const CarregamentoDetalhe = () => {
                   </div>
                 )}
                 <div
-                  className={`
-                    rounded-full flex items-center justify-center transition-all
-                    ${isSelected ? "bg-primary text-white border-2 border-primary shadow-lg" :
-                      isFinalizada ? "bg-green-500 text-white" :
-                      isAtual ? "bg-blue-500 text-white" :
-                        "bg-gray-200 text-gray-600"}
-                    ${podeClicar ? "cursor-pointer hover:scale-105" : "cursor-default"}
-                  `}
+                  className={circleClasses}
                   style={{
                     width: 36,
                     height: 36,
-                    fontWeight: 700,
                     fontSize: "1.1rem",
                     marginBottom: 3,
-                    boxShadow: isSelected ? "0 2px 6px 0 rgba(80,80,80,.15)" : "none",
+                    boxShadow: shadowStyle,
                   }}
                   onClick={() => {
                     if (podeClicar) {
@@ -247,12 +263,11 @@ const CarregamentoDetalhe = () => {
                 <div
                   className={
                     "text-xs text-center leading-tight " +
-                    (isSelected ? "text-primary font-medium" : "text-foreground") +
+                    (isSelected ? "text-primary font-bold" : "text-foreground") +
                     (podeClicar ? " cursor-pointer" : "")
                   }
                   style={{
                     minHeight: 32,
-                    fontWeight: isSelected ? 500 : 400,
                     marginTop: 2,
                   }}
                   onClick={() => {
