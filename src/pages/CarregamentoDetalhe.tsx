@@ -8,32 +8,65 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/use-toast";
+import { Badge } from "@/components/ui/badge";
 import { Loader2, CheckCircle, ArrowRight, Download, FileText, Image, User, Truck, Calendar, Hash, Clock } from "lucide-react";
 
 const ETAPAS = [
-  { id: 1, nome: "Chegada", titulo: "Chegada do Caminhão", campo_data: "data_chegada", campo_obs: "observacao_chegada", campo_url: "url_foto_chegada" },
-  { id: 2, nome: "Início Carregamento", titulo: "Início do Carregamento", campo_data: "data_inicio", campo_obs: "observacao_inicio", campo_url: "url_foto_inicio" },
-  { id: 3, nome: "Carregando", titulo: "Carregando", campo_data: "data_carregando", campo_obs: "observacao_carregando", campo_url: "url_foto_carregando" },
-  { id: 4, nome: "Carreg. Finalizado", titulo: "Carregamento Finalizado", campo_data: "data_finalizacao", campo_obs: "observacao_finalizacao", campo_url: "url_foto_finalizacao" },
-  { id: 5, nome: "Documentação", titulo: "Anexar Documentação", campo_data: "data_documentacao", campo_obs: "observacao_documentacao", campo_url: "url_nota_fiscal" },
-  { id: 6, nome: "Finalizado", titulo: "Finalizado", campo_data: null, campo_obs: null, campo_url: null },
+  { 
+    id: 1, 
+    nome: "Chegada", 
+    titulo: "Chegada do Caminhão", 
+    campo_data: "data_chegada", 
+    campo_obs: "observacao_chegada", 
+    campo_url: "url_foto_chegada",
+    cor: "bg-orange-500 text-white"
+  },
+  { 
+    id: 2, 
+    nome: "Início Carregamento", 
+    titulo: "Início do Carregamento", 
+    campo_data: "data_inicio", 
+    campo_obs: "observacao_inicio", 
+    campo_url: "url_foto_inicio",
+    cor: "bg-blue-500 text-white"
+  },
+  { 
+    id: 3, 
+    nome: "Carregando", 
+    titulo: "Carregando", 
+    campo_data: "data_carregando", 
+    campo_obs: "observacao_carregando", 
+    campo_url: "url_foto_carregando",
+    cor: "bg-purple-500 text-white"
+  },
+  { 
+    id: 4, 
+    nome: "Carreg. Finalizado", 
+    titulo: "Carregamento Finalizado", 
+    campo_data: "data_finalizacao", 
+    campo_obs: "observacao_finalizacao", 
+    campo_url: "url_foto_finalizacao",
+    cor: "bg-indigo-500 text-white"
+  },
+  { 
+    id: 5, 
+    nome: "Documentação", 
+    titulo: "Anexar Documentação", 
+    campo_data: "data_documentacao", 
+    campo_obs: "observacao_documentacao", 
+    campo_url: "url_nota_fiscal",
+    cor: "bg-yellow-600 text-white"
+  },
+  { 
+    id: 6, 
+    nome: "Finalizado", 
+    titulo: "Finalizado", 
+    campo_data: null, 
+    campo_obs: null, 
+    campo_url: null,
+    cor: "bg-green-600 text-white"
+  },
 ];
-
-// Função para derivar status visual da etapa
-const getStatusFromEtapa = (etapa: number) => {
-  switch (etapa) {
-    case 1:
-    case 2:
-    case 3:
-    case 4:
-    case 5:
-      return { label: "Em Andamento", variant: "default", color: "blue" };
-    case 6:
-      return { label: "Finalizado", variant: "success", color: "green" };
-    default:
-      return { label: "Aguardando", variant: "secondary", color: "gray" };
-  }
-};
 
 const formatarDataHora = (v?: string | null) => {
   if (!v) return "-";
@@ -416,8 +449,19 @@ const CarregamentoDetalhe = () => {
 
   const stats = calcularEstatisticas();
 
-  // Derivar status visual da etapa
-  const statusVisual = carregamento ? getStatusFromEtapa(carregamento.etapa_atual) : null;
+  // Função para obter informações da etapa
+  const getEtapaInfo = (etapa: number) => {
+    const found = ETAPAS.find(e => e.id === etapa);
+    return found || { 
+      id: etapa, 
+      nome: `Etapa ${etapa}`, 
+      titulo: `Etapa ${etapa}`,
+      cor: "bg-gray-500 text-white",
+      campo_data: null,
+      campo_obs: null,
+      campo_url: null
+    };
+  };
 
   // ----------- COMPONENTES DE LAYOUT -----------
 
@@ -790,6 +834,8 @@ const CarregamentoDetalhe = () => {
 
   const renderInformacoesProcesso = () => {
     const agendamento = carregamento?.agendamento;
+    const etapaAtual = carregamento?.etapa_atual ?? 1;
+    const etapaInfo = getEtapaInfo(etapaAtual);
 
     return (
       <Card className="shadow-sm">
@@ -834,24 +880,26 @@ const CarregamentoDetalhe = () => {
               </div>
             </div>
 
-            {/* Linha 3: Status (derivado da etapa) e Etapa */}
+            {/* Linha 3: Apenas Etapa Atual (sem status redundante) */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div className="flex items-center gap-2">
                 <Calendar className="w-4 h-4 text-muted-foreground" />
                 <div className="flex-1 min-w-0">
-                  <span className="text-xs text-muted-foreground block">Status</span>
-                  <span className="text-sm font-medium" style={{ color: statusVisual?.color }}>
-                    {statusVisual?.label}
-                  </span>
+                  <span className="text-xs text-muted-foreground block">Etapa Atual</span>
+                  <Badge className={`${etapaInfo.cor} border-0 font-medium text-xs`}>
+                    {etapaInfo.nome}
+                  </Badge>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                <Hash className="w-4 h-4 text-muted-foreground" />
-                <div className="flex-1 min-w-0">
-                  <span className="text-xs text-muted-foreground block">Etapa atual</span>
-                  <span className="text-sm font-medium">{ETAPAS.find(e => e.id === carregamento.etapa_atual)?.nome || "N/A"}</span>
+              {carregamento.numero_nf && (
+                <div className="flex items-center gap-2">
+                  <Hash className="w-4 h-4 text-muted-foreground" />
+                  <div className="flex-1 min-w-0">
+                    <span className="text-xs text-muted-foreground block">Nota Fiscal</span>
+                    <span className="text-sm font-medium">{carregamento.numero_nf}</span>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
 
             {/* Estatísticas de Tempo */}
@@ -879,13 +927,6 @@ const CarregamentoDetalhe = () => {
                     <div>
                       <span className="text-muted-foreground block">Tempo médio por etapa</span>
                       <span className="font-medium">{formatarTempo(stats.tempoMedioPorEtapa)}</span>
-                    </div>
-                  )}
-
-                  {carregamento.numero_nf && (
-                    <div>
-                      <span className="text-muted-foreground block">Nota Fiscal</span>
-                      <span className="font-medium">{carregamento.numero_nf}</span>
                     </div>
                   )}
                 </div>
