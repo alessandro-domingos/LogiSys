@@ -7,15 +7,15 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, CheckCircle, ArrowRight, Download, FileText, Image } from "lucide-react";
+import { Loader2, CheckCircle, ArrowRight, Download, FileText, Image, User, Truck, Calendar, Hash } from "lucide-react";
 
 const ETAPAS = [
-  { id: 1, nome: "Chegada" },
-  { id: 2, nome: "Início Carregamento" },
-  { id: 3, nome: "Carregando" },
-  { id: 4, nome: "Carreg. Finalizado" },
-  { id: 5, nome: "Documentação" },
-  { id: 6, nome: "Finalizado" },
+  { id: 1, nome: "Chegada", titulo: "Chegada do Caminhão" },
+  { id: 2, nome: "Início Carregamento", titulo: "Início do Carregamento" },
+  { id: 3, nome: "Carregando", titulo: "Carregando" },
+  { id: 4, nome: "Carreg. Finalizado", titulo: "Carregamento Finalizado" },
+  { id: 5, nome: "Documentação", titulo: "Anexar Documentação" },
+  { id: 6, nome: "Finalizado", titulo: "Finalizado" },
 ];
 
 const formatarDataHora = (v?: string | null) => {
@@ -198,18 +198,17 @@ const CarregamentoDetalhe = () => {
             const isSelected = selectedEtapa === etapaIndex;
             const podeClicar = true; // Todas as etapas são clicáveis para visualização
             
-            // Lógica visual melhorada
+            // Lógica visual melhorada - prioriza seleção sobre estado atual
             let circleClasses = "rounded-full flex items-center justify-center transition-all";
             let shadowStyle = "none";
             
-            if (isSelected && !isAtual) {
-              // Etapa selecionada (diferente da atual): borda azul grossa + fundo branco
+            if (isSelected) {
+              // Etapa selecionada: sempre borda azul grossa + fundo branco
               circleClasses += " bg-white text-primary border-4 border-primary font-bold";
               shadowStyle = "0 2px 8px 0 rgba(59, 130, 246, 0.3)";
             } else if (isAtual) {
-              // Etapa atual: azul
+              // Etapa atual (não selecionada): azul
               circleClasses += " bg-blue-500 text-white";
-              shadowStyle = isSelected ? "0 2px 8px 0 rgba(59, 130, 246, 0.4)" : "none";
             } else if (isFinalizada) {
               // Etapa finalizada: verde
               circleClasses += " bg-green-500 text-white";
@@ -258,7 +257,7 @@ const CarregamentoDetalhe = () => {
                     }
                   }}
                 >
-                  {isFinalizada ? <CheckCircle className="w-6 h-6" /> : etapaIndex}
+                  {isFinalizada && !isSelected ? <CheckCircle className="w-6 h-6" /> : etapaIndex}
                 </div>
                 <div
                   className={
@@ -303,7 +302,8 @@ const CarregamentoDetalhe = () => {
   const renderAreaEtapas = () => {
     if (!selectedEtapa) return null;
 
-    const etapaNome = ETAPAS.find(e => e.id === selectedEtapa)?.nome || "Etapa";
+    const etapa = ETAPAS.find(e => e.id === selectedEtapa);
+    const etapaTitulo = etapa?.titulo || "Etapa";
     const isEtapaDoc = selectedEtapa === 5;
     const etapaAtual = carregamento?.etapa_atual ?? 1;
     const isEtapaConcluida = selectedEtapa < etapaAtual;
@@ -353,84 +353,96 @@ const CarregamentoDetalhe = () => {
     const etapaData = getEtapaData();
 
     return (
-      <Card className="mb-8 shadow-sm">
-        <CardContent className="p-6 space-y-6">
-          <div className="border-b pb-4">
-            <h2 className="text-xl font-semibold text-foreground">{etapaNome}</h2>
-            {etapaData.data && (
-              <p className="text-sm text-muted-foreground mt-1">
-                Concluída em: {formatarDataHora(etapaData.data)}
-              </p>
+      <Card className="mb-6 shadow-sm">
+        <CardContent className="p-4 space-y-4">
+          {/* Header com título e botão */}
+          <div className="flex items-center justify-between border-b pb-3">
+            <div>
+              <h2 className="text-lg font-semibold text-foreground">{etapaTitulo}</h2>
+              {etapaData.data && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  Concluída em: {formatarDataHora(etapaData.data)}
+                </p>
+              )}
+            </div>
+            {podeEditar && (
+              <Button
+                disabled={!stageFile}
+                size="sm"
+                className="px-6"
+              >
+                {selectedEtapa === 5 ? "Finalizar" : "Próxima"}
+              </Button>
             )}
           </div>
 
           {isEtapaFinalizada ? (
             // Etapa 6 finalizada - processo concluído
-            <div className="text-center py-8">
-              <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-foreground mb-2">Processo Finalizado</h3>
-              <p className="text-muted-foreground">
+            <div className="text-center py-6">
+              <CheckCircle className="w-12 h-12 text-green-500 mx-auto mb-3" />
+              <h3 className="text-base font-medium text-foreground mb-1">Processo Finalizado</h3>
+              <p className="text-sm text-muted-foreground">
                 O carregamento foi concluído com sucesso.
               </p>
             </div>
           ) : isEtapaConcluida ? (
             // Etapa concluída - mostrar arquivos e observações (somente leitura)
-            <div className="space-y-6">
-              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <CheckCircle className="w-5 h-5 text-green-600" />
-                  <span className="font-medium text-green-800">Etapa Concluída</span>
+            <div className="space-y-4">
+              <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <CheckCircle className="w-4 h-4 text-green-600" />
+                  <span className="font-medium text-green-800 text-sm">Etapa Concluída</span>
                 </div>
                 
                 {etapaData.observacao && (
-                  <div className="mb-4">
-                    <span className="text-sm font-medium text-green-700">Observações:</span>
-                    <p className="text-sm text-green-600 mt-1 bg-white p-2 rounded border">{etapaData.observacao}</p>
+                  <div className="mb-3">
+                    <span className="text-xs font-medium text-green-700">Observações:</span>
+                    <p className="text-xs text-green-600 mt-1 bg-white p-2 rounded border">{etapaData.observacao}</p>
                   </div>
                 )}
 
                 {/* Mostrar links para arquivos */}
-                <div className="space-y-3">
+                <div className="space-y-2">
                   {isEtapaDoc ? (
                     // Etapa de documentação - mostrar PDF e XML
                     <>
                       {carregamento?.url_nota_fiscal && (
                         <div className="flex items-center gap-2 p-2 bg-white rounded border">
-                          <FileText className="w-4 h-4 text-green-600" />
+                          <FileText className="w-3 h-3 text-green-600" />
                           <a 
                             href={carregamento.url_nota_fiscal} 
                             target="_blank" 
                             rel="noopener noreferrer"
-                            className="text-green-700 hover:text-green-800 underline text-sm flex-1"
+                            className="text-green-700 hover:text-green-800 underline text-xs flex-1"
                           >
                             Baixar Nota Fiscal (PDF)
                           </a>
-                          <Download className="w-4 h-4 text-green-600" />
+                          <Download className="w-3 h-3 text-green-600" />
                         </div>
                       )}
                       {carregamento?.url_xml && (
                         <div className="flex items-center gap-2 p-2 bg-white rounded border">
-                          <FileText className="w-4 h-4 text-green-600" />
+                          <FileText className="w-3 h-3 text-green-600" />
                           <a 
                             href={carregamento.url_xml} 
                             target="_blank" 
                             rel="noopener noreferrer"
-                            className="text-green-700 hover:text-green-800 underline text-sm flex-1"
+                            className="text-green-700 hover:text-green-800 underline text-xs flex-1"
                           >
                             Baixar Arquivo XML
                           </a>
-                          <Download className="w-4 h-4 text-green-600" />
+                          <Download className="w-3 h-3 text-green-600" />
                         </div>
                       )}
                     </>
                   ) : (
-                    // Outras etapas - mostrar foto (simulado por enquanto - será implementado depois)
+                    // Outras etapas - mostrar foto
                     <div className="flex items-center gap-2 p-2 bg-white rounded border">
-                      <Image className="w-4 h-4 text-green-600" />
-                      <span className="text-green-700 text-sm flex-1">
-                        Foto anexada - {etapaNome}
+                      <Image className="w-3 h-3 text-green-600" />
+                      <span className="text-green-700 text-xs flex-1">
+                        Foto anexada - {etapa?.nome}
                       </span>
-                      <Download className="w-4 h-4 text-green-600" />
+                      <Download className="w-3 h-3 text-green-600" />
                     </div>
                   )}
                 </div>
@@ -438,66 +450,55 @@ const CarregamentoDetalhe = () => {
             </div>
           ) : podeEditar ? (
             // Etapa atual - usuário armazém pode editar
-            <>
-              <div className="space-y-4">
+            <div className="space-y-3">
+              <div>
+                <label className="text-sm font-semibold block mb-1">
+                  {isEtapaDoc ? "Anexar Nota Fiscal (PDF) *" : "Anexar foto obrigatória *"}
+                </label>
+                <Input
+                  type="file"
+                  accept={isEtapaDoc ? ".pdf" : "image/*"}
+                  onChange={e => setStageFile(e.target.files?.[0] ?? null)}
+                  className="w-full text-sm"
+                />
+              </div>
+
+              {isEtapaDoc && (
                 <div>
-                  <label className="text-base font-semibold block mb-2">
-                    {isEtapaDoc ? "Anexar Nota Fiscal (PDF) *" : "Anexar foto obrigatória *"}
+                  <label className="text-sm font-semibold block mb-1">
+                    Anexar Arquivo XML
                   </label>
                   <Input
                     type="file"
-                    accept={isEtapaDoc ? ".pdf" : "image/*"}
-                    onChange={e => setStageFile(e.target.files?.[0] ?? null)}
-                    className="w-full"
+                    accept=".xml"
+                    onChange={e => setStageFileXml(e.target.files?.[0] ?? null)}
+                    className="w-full text-sm"
                   />
                 </div>
+              )}
 
-                {isEtapaDoc && (
-                  <div>
-                    <label className="text-base font-semibold block mb-2">
-                      Anexar Arquivo XML
-                    </label>
-                    <Input
-                      type="file"
-                      accept=".xml"
-                      onChange={e => setStageFileXml(e.target.files?.[0] ?? null)}
-                      className="w-full"
-                    />
-                  </div>
-                )}
-
-                <div>
-                  <label className="text-base font-semibold block mb-2">
-                    Observações (opcional)
-                  </label>
-                  <Textarea
-                    placeholder={`Digite observações sobre ${etapaNome.toLowerCase()}...`}
-                    value={stageObs}
-                    onChange={e => setStageObs(e.target.value)}
-                    rows={3}
-                  />
-                </div>
+              <div>
+                <label className="text-sm font-semibold block mb-1">
+                  Observações (opcional)
+                </label>
+                <Textarea
+                  placeholder={`Digite observações sobre ${etapa?.nome.toLowerCase()}...`}
+                  value={stageObs}
+                  onChange={e => setStageObs(e.target.value)}
+                  rows={2}
+                  className="text-sm"
+                />
               </div>
-
-              <div className="flex justify-end pt-4">
-                <Button
-                  disabled={!stageFile}
-                  size="lg"
-                  className="px-8"
-                >
-                  {selectedEtapa === 5 ? "Finalizar Carregamento" : "Próxima Etapa"}
-                </Button>
-              </div>
-            </>
+            </div>
           ) : isEtapaFutura ? (
             // Etapa futura - aguardando etapa anterior
-            <div className="text-center py-8 text-muted-foreground">
-              <p>Aguardando a etapa anterior ser finalizada.</p>
+            <div className="text-center py-6 text-muted-foreground">
+              <p className="text-sm">Aguardando a etapa anterior ser finalizada.</p>
             </div>
           ) : (
-            // Etapa atual mas usuário não pode editar (admin, logística, cliente)
-            <div className="text-center py-8 text-muted-foreground">
-              <p>Aguardando execução desta etapa pelo armazém.</p>
+            // Etapa atual mas usuário não pode editar
+            <div className="text-center py-6 text-muted-foreground">
+              <p className="text-sm">Aguardando execução desta etapa pelo armazém.</p>
             </div>
           )}
         </CardContent>
@@ -512,86 +513,81 @@ const CarregamentoDetalhe = () => {
           (Date.now() - processoInicio.getTime()) / 1000 / 60
         )} min`
       : "N/A";
-    const tempoTotalFinalizacao = processoInicio
-      ? carregamento.status === "finalizado"
-        ? `${Math.round(
-            ((processoCriacao
-              ? processoCriacao.getTime()
-              : Date.now()) -
-              processoInicio.getTime()) /
-              1000 /
-              60
-          )} min`
-        : "-"
-      : "N/A";
 
     return (
       <Card className="shadow-sm">
-        <CardContent className="p-6">
-          <h2 className="text-lg font-semibold mb-6">Informações do Carregamento</h2>
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-2 md:gap-8">
-            <div className="space-y-4">
-              <div>
-                <span className={LABEL_STYLE}>Nome do cliente</span>
-                <span className={VALUE_STYLE}>
-                  {agendamento?.cliente?.nome || "N/A"}
-                </span>
+        <CardContent className="p-4">
+          <h2 className="text-base font-semibold mb-4">Informações do Carregamento</h2>
+          
+          {/* Layout compacto para mobile */}
+          <div className="space-y-4">
+            {/* Linha 1: Cliente e Quantidade */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="flex items-center gap-2">
+                <User className="w-4 h-4 text-muted-foreground" />
+                <div className="flex-1 min-w-0">
+                  <span className="text-xs text-muted-foreground block">Cliente</span>
+                  <span className="text-sm font-medium truncate block">{agendamento?.cliente?.nome || "N/A"}</span>
+                </div>
               </div>
-              <div>
-                <span className={LABEL_STYLE}>Quantidade</span>
-                <span className={VALUE_STYLE}>
-                  {agendamento?.quantidade ?? "N/A"} toneladas
-                </span>
-              </div>
-              <div>
-                <span className={LABEL_STYLE}>Placa caminhão</span>
-                <span className={VALUE_STYLE}>
-                  {agendamento?.placa_caminhao || "N/A"}
-                </span>
-              </div>
-              <div>
-                <span className={LABEL_STYLE}>Motorista</span>
-                <span className={VALUE_STYLE}>
-                  {agendamento?.motorista_nome || "N/A"}
-                </span>
-              </div>
-              <div>
-                <span className={LABEL_STYLE}>Doc. Motorista</span>
-                <span className={VALUE_STYLE}>
-                  {agendamento?.motorista_documento || "N/A"}
-                </span>
-              </div>
-              <div>
-                <span className={LABEL_STYLE}>Número nf</span>
-                <span className={VALUE_STYLE}>
-                  {carregamento.numero_nf || "N/A"}
-                </span>
+              <div className="flex items-center gap-2">
+                <Hash className="w-4 h-4 text-muted-foreground" />
+                <div className="flex-1 min-w-0">
+                  <span className="text-xs text-muted-foreground block">Quantidade</span>
+                  <span className="text-sm font-medium">{agendamento?.quantidade ?? "N/A"} ton</span>
+                </div>
               </div>
             </div>
-            <div className="space-y-4">
-              <div>
-                <span className={LABEL_STYLE}>Status</span>
-                <span className={`${VALUE_STYLE} capitalize`}>
-                  {carregamento.status}
-                </span>
+
+            {/* Linha 2: Placa e Motorista */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="flex items-center gap-2">
+                <Truck className="w-4 h-4 text-muted-foreground" />
+                <div className="flex-1 min-w-0">
+                  <span className="text-xs text-muted-foreground block">Placa</span>
+                  <span className="text-sm font-medium">{agendamento?.placa_caminhao || "N/A"}</span>
+                </div>
               </div>
-              <div>
-                <span className={LABEL_STYLE}>Etapa atual</span>
-                <span className={VALUE_STYLE}>
-                  {ETAPAS.find(e => e.id === carregamento.etapa_atual)?.nome || "N/A"}
-                </span>
+              <div className="flex items-center gap-2">
+                <User className="w-4 h-4 text-muted-foreground" />
+                <div className="flex-1 min-w-0">
+                  <span className="text-xs text-muted-foreground block">Motorista</span>
+                  <span className="text-sm font-medium truncate block">{agendamento?.motorista_nome || "N/A"}</span>
+                </div>
               </div>
-              <div>
-                <span className={LABEL_STYLE}>Tempo total decorrido</span>
-                <span className={`${VALUE_STYLE} text-[0.97rem]`}>
-                  {tempoTotalDecorrido}
-                </span>
+            </div>
+
+            {/* Linha 3: Status e Etapa */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="flex items-center gap-2">
+                <Calendar className="w-4 h-4 text-muted-foreground" />
+                <div className="flex-1 min-w-0">
+                  <span className="text-xs text-muted-foreground block">Status</span>
+                  <span className="text-sm font-medium capitalize">{carregamento.status}</span>
+                </div>
               </div>
-              <div>
-                <span className={LABEL_STYLE}>Tempo até finalização</span>
-                <span className={`${VALUE_STYLE} text-[0.97rem]`}>
-                  {tempoTotalFinalizacao}
-                </span>
+              <div className="flex items-center gap-2">
+                <Hash className="w-4 h-4 text-muted-foreground" />
+                <div className="flex-1 min-w-0">
+                  <span className="text-xs text-muted-foreground block">Etapa atual</span>
+                  <span className="text-sm font-medium">{ETAPAS.find(e => e.id === carregamento.etapa_atual)?.nome || "N/A"}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Linha 4: Tempo */}
+            <div className="bg-gray-50 rounded-lg p-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-xs text-muted-foreground block">Tempo decorrido</span>
+                  <span className="text-sm font-medium">{tempoTotalDecorrido}</span>
+                </div>
+                {carregamento.numero_nf && (
+                  <div className="text-right">
+                    <span className="text-xs text-muted-foreground block">Nota Fiscal</span>
+                    <span className="text-sm font-medium">{carregamento.numero_nf}</span>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -641,7 +637,7 @@ const CarregamentoDetalhe = () => {
   return (
     <div className="min-h-screen bg-background">
       <PageHeader title="Detalhes do Carregamento" />
-      <div className="container mx-auto px-1 md:px-4 pt-1 pb-8 gap-4 flex flex-col max-w-[1050px]">
+      <div className="container mx-auto px-2 md:px-4 pt-1 pb-8 gap-4 flex flex-col max-w-[1050px]">
         {renderEtapasFluxo()}
         {renderAreaEtapas()}
         {renderInformacoesProcesso()}
