@@ -10,8 +10,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Truck, X, Filter as FilterIcon, ChevronDown, ChevronUp } from "lucide-react";
 
-type StatusCarregamento = "aguardando" | "em_andamento" | "finalizado" | "cancelado";
-
 interface CarregamentoItem {
   id: string;
   cliente: string;
@@ -20,7 +18,6 @@ interface CarregamentoItem {
   motorista: string;
   data_retirada: string; // yyyy-mm-dd
   horario: string;
-  status: StatusCarregamento; // Derivado da etapa_atual
   etapa_atual: number;
   fotosTotal: number;
   numero_nf: string | null;
@@ -55,31 +52,15 @@ interface SupabaseCarregamentoItem {
   } | null;
 }
 
-// Array de etapas
+// Array de etapas com cores visuais bem contrastadas
 const ETAPAS = [
-  { id: 1, nome: "Chegada" },
-  { id: 2, nome: "Início Carregamento" },
-  { id: 3, nome: "Carregando" },
-  { id: 4, nome: "Carreg. Finalizado" },
-  { id: 5, nome: "Documentação" },
-  { id: 6, nome: "Finalizado" },
+  { id: 1, nome: "Chegada", cor: "bg-orange-500 text-white", corFiltro: "bg-orange-100 text-orange-800 hover:bg-orange-200" },
+  { id: 2, nome: "Início Carregamento", cor: "bg-blue-500 text-white", corFiltro: "bg-blue-100 text-blue-800 hover:bg-blue-200" },
+  { id: 3, nome: "Carregando", cor: "bg-purple-500 text-white", corFiltro: "bg-purple-100 text-purple-800 hover:bg-purple-200" },
+  { id: 4, nome: "Carreg. Finalizado", cor: "bg-indigo-500 text-white", corFiltro: "bg-indigo-100 text-indigo-800 hover:bg-indigo-200" },
+  { id: 5, nome: "Documentação", cor: "bg-yellow-600 text-white", corFiltro: "bg-yellow-100 text-yellow-800 hover:bg-yellow-200" },
+  { id: 6, nome: "Finalizado", cor: "bg-green-600 text-white", corFiltro: "bg-green-100 text-green-800 hover:bg-green-200" },
 ];
-
-// Função para derivar status da etapa
-const getStatusFromEtapa = (etapa: number): StatusCarregamento => {
-  switch (etapa) {
-    case 1:
-    case 2:
-    case 3:
-    case 4:
-    case 5:
-      return "em_andamento";
-    case 6:
-      return "finalizado";
-    default:
-      return "aguardando";
-  }
-};
 
 const Carregamentos = () => {
   const [userId, setUserId] = useState<string | null>(null);
@@ -104,7 +85,6 @@ const Carregamentos = () => {
     fetchRoles();
   }, [userId]);
 
-  // Atualizado: só busca os vínculos de cliente/armazem SE necessário!
   useEffect(() => {
     const fetchVinculos = async () => {
       if (!userId || roles.length === 0) return;
@@ -134,7 +114,6 @@ const Carregamentos = () => {
     // eslint-disable-next-line
   }, [userId, roles]);
 
-  // Query principal - removido campo status
   const { data: carregamentosData, isLoading, error } = useQuery({
     queryKey: ["carregamentos", clienteId, armazemId, roles],
     queryFn: async () => {
@@ -167,13 +146,11 @@ const Carregamentos = () => {
         `)
         .order("data_chegada", { ascending: false });
 
-      // Aplica filtro pelo perfil (para performance extra, embora a policy já garanta segurança)
       if (roles.includes("cliente") && clienteId) {
         query = query.eq("cliente_id", clienteId);
       } else if (roles.includes("armazem") && armazemId) {
         query = query.eq("armazem_id", armazemId);
       }
-      // admin/logistica: vê tudo
 
       const { data, error } = await query;
       if (error) {
@@ -182,14 +159,11 @@ const Carregamentos = () => {
       }
       return data;
     },
-    // A query só deve ser habilitada após:
-    //  - userId e roles definidos
-    //  - se for cliente/armazem, o respectivo id já buscado (ou null para outros)
     enabled:
       userId != null &&
       roles.length > 0 &&
       (
-        (!roles.includes("cliente") && !roles.includes("armazem")) // admin/logistica pode carregar sem esperar mais nada
+        (!roles.includes("cliente") && !roles.includes("armazem"))
         || (roles.includes("cliente") && clienteId !== null)
         || (roles.includes("armazem") && armazemId !== null)
       ),
@@ -209,9 +183,7 @@ const Carregamentos = () => {
         item.url_foto_finalizacao
       ].filter(url => url && url.trim() !== '').length;
 
-      // Derivar status da etapa
       const etapaAtual = item.etapa_atual ?? 1;
-      const statusDerivado = getStatusFromEtapa(etapaAtual);
 
       return {
         id: item.id,
@@ -221,7 +193,6 @@ const Carregamentos = () => {
         motorista: agendamento?.motorista_nome || "N/A",
         data_retirada: agendamento?.data_retirada || "N/A",
         horario: agendamento?.horario || "00:00",
-        status: statusDerivado, // Status derivado da etapa
         etapa_atual: etapaAtual,
         fotosTotal: fotosCount,
         numero_nf: item.numero_nf || null,
@@ -231,25 +202,18 @@ const Carregamentos = () => {
     });
   }, [carregamentosData]);
 
-  // Filtros
+  // Filtros simplificados - apenas etapas e período
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [search, setSearch] = useState("");
-  const [selectedStatuses, setSelectedStatuses] = useState<StatusCarregamento[]>([]);
   const [selectedEtapas, setSelectedEtapas] = useState<number[]>([]);
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
 
-  const allStatuses: StatusCarregamento[] = ["aguardando", "em_andamento", "finalizado"];
-
-  const toggleStatus = (st: StatusCarregamento) =>
-    setSelectedStatuses((prev) => (prev.includes(st) ? prev.filter((s) => s !== st) : [...prev, st]));
-  
   const toggleEtapa = (etapa: number) =>
     setSelectedEtapas((prev) => (prev.includes(etapa) ? prev.filter((e) => e !== etapa) : [...prev, etapa]));
   
   const clearFilters = () => {
     setSearch("");
-    setSelectedStatuses([]);
     setSelectedEtapas([]);
     setDateFrom("");
     setDateTo("");
@@ -262,7 +226,6 @@ const Carregamentos = () => {
         const hay = `${c.cliente} ${c.motorista} ${c.placa}`.toLowerCase();
         if (!hay.includes(term)) return false;
       }
-      if (selectedStatuses.length > 0 && !selectedStatuses.includes(c.status)) return false;
       if (selectedEtapas.length > 0 && !selectedEtapas.includes(c.etapa_atual)) return false;
       if (dateFrom) {
         const from = new Date(dateFrom);
@@ -275,48 +238,17 @@ const Carregamentos = () => {
       }
       return true;
     });
-  }, [carregamentos, search, selectedStatuses, selectedEtapas, dateFrom, dateTo]);
+  }, [carregamentos, search, selectedEtapas, dateFrom, dateTo]);
 
   const showingCount = filteredCarregamentos.length;
   const totalCount = carregamentos.length;
   const activeAdvancedCount =
-    (selectedStatuses.length ? 1 : 0) + 
     (selectedEtapas.length ? 1 : 0) + 
     ((dateFrom || dateTo) ? 1 : 0);
 
-  const getStatusBadgeVariant = (status: StatusCarregamento) => {
-    switch (status) {
-      case "aguardando": return "secondary";
-      case "em_andamento": return "default";
-      case "finalizado": return "default";
-      case "cancelado": return "outline";
-      default: return "outline";
-    }
-  };
-
-  const getStatusLabel = (status: StatusCarregamento) => {
-    switch (status) {
-      case "aguardando": return "Aguardando";
-      case "em_andamento": return "Em Andamento";
-      case "finalizado": return "Finalizado";
-      case "cancelado": return "Cancelado";
-      default: return status;
-    }
-  };
-
-  const getEtapaLabel = (etapa_atual: number) => {
+  const getEtapaInfo = (etapa_atual: number) => {
     const found = ETAPAS.find(e => e.id === etapa_atual);
-    return found ? found.nome : `Etapa ${etapa_atual}`;
-  };
-
-  const getStatusColor = (status: StatusCarregamento) => {
-    switch (status) {
-      case "aguardando": return "text-gray-600";
-      case "em_andamento": return "text-blue-600";
-      case "finalizado": return "text-green-600";
-      case "cancelado": return "text-red-600";
-      default: return "text-gray-600";
-    }
+    return found || { id: etapa_atual, nome: `Etapa ${etapa_atual}`, cor: "bg-gray-500 text-white", corFiltro: "bg-gray-100 text-gray-800 hover:bg-gray-200" };
   };
 
   if (isLoading || userId == null || roles.length === 0 ||
@@ -327,7 +259,7 @@ const Carregamentos = () => {
       <div className="min-h-screen bg-background">
         <PageHeader
           title="Carregamentos"
-          description="Acompanhe o status dos carregamentos em andamento"
+          description="Acompanhe o progresso dos carregamentos"
         />
         <div className="container mx-auto px-6 py-12 text-center">
           <div className="flex justify-center items-center gap-2">
@@ -344,7 +276,7 @@ const Carregamentos = () => {
       <div className="min-h-screen bg-background">
         <PageHeader
           title="Carregamentos"
-          description="Acompanhe o status dos carregamentos em andamento"
+          description="Acompanhe o progresso dos carregamentos"
         />
         <div className="container mx-auto px-6 py-12">
           <Card className="border-destructive">
@@ -364,7 +296,7 @@ const Carregamentos = () => {
     <div className="min-h-screen bg-background">
       <PageHeader
         title="Carregamentos"
-        description="Acompanhe o status dos carregamentos em andamento"
+        description="Acompanhe o progresso dos carregamentos"
       />
 
       {/* Barra de busca/filtro */}
@@ -385,24 +317,7 @@ const Carregamentos = () => {
       {filtersOpen && (
         <div className="container mx-auto px-6 pt-2">
           <div className="rounded-md border p-3 space-y-3">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <div className="space-y-1">
-                <Label>Status</Label>
-                <div className="flex flex-wrap gap-2">
-                  {allStatuses.map((st) => {
-                    const active = selectedStatuses.includes(st);
-                    const label = getStatusLabel(st);
-                    return (
-                      <Badge
-                        key={st}
-                        onClick={() => toggleStatus(st)}
-                        className={`cursor-pointer text-xs px-2 py-1 ${active ? "bg-gradient-primary text-white" : "bg-muted text-gray-700 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-900"}`}>
-                        {label}
-                      </Badge>
-                    );
-                  })}
-                </div>
-              </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label>Etapas</Label>
                 <div className="flex flex-wrap gap-2">
@@ -412,7 +327,11 @@ const Carregamentos = () => {
                       <Badge
                         key={etapa.id}
                         onClick={() => toggleEtapa(etapa.id)}
-                        className={`cursor-pointer text-xs px-2 py-1 ${active ? "bg-gradient-primary text-white" : "bg-muted text-gray-700 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-900"}`}>
+                        className={`cursor-pointer text-xs px-2 py-1 border-0 ${
+                          active 
+                            ? etapa.cor 
+                            : etapa.corFiltro
+                        }`}>
                         {etapa.nome}
                       </Badge>
                     );
@@ -438,40 +357,44 @@ const Carregamentos = () => {
 
       <div className="container mx-auto px-6 py-6">
         <div className="grid gap-4">
-          {filteredCarregamentos.map((carr) => (
-            <Link key={carr.id} to={`/carregamentos/${carr.id}`} style={{ textDecoration: "none", color: "inherit" }}>
-              <Card className="transition-all hover:shadow-md cursor-pointer">
-                <CardContent className="p-5">
-                  <div className="space-y-4">
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-start gap-4">
-                        <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-warning">
-                          <Truck className="h-5 w-5 text-white" />
+          {filteredCarregamentos.map((carr) => {
+            const etapaInfo = getEtapaInfo(carr.etapa_atual);
+            
+            return (
+              <Link key={carr.id} to={`/carregamentos/${carr.id}`} style={{ textDecoration: "none", color: "inherit" }}>
+                <Card className="transition-all hover:shadow-md cursor-pointer">
+                  <CardContent className="p-5">
+                    <div className="space-y-4">
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-start gap-4">
+                          <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-warning">
+                            <Truck className="h-5 w-5 text-white" />
+                          </div>
+                          <div>
+                            <h3 className="font-semibold text-foreground">{carr.cliente}</h3>
+                            <p className="text-sm text-muted-foreground">{carr.quantidade} toneladas</p>
+                            <p className="text-xs text-muted-foreground">{carr.data_retirada} • {carr.horario}</p>
+                            <p className="text-xs text-muted-foreground">Placa: <span className="font-medium">{carr.placa}</span></p>
+                            <p className="text-xs text-muted-foreground">Motorista: <span className="font-medium">{carr.motorista}</span></p>
+                            {carr.numero_nf && (
+                              <p className="text-xs text-muted-foreground">Nº NF: <span className="font-medium">{carr.numero_nf}</span></p>
+                            )}
+                          </div>
                         </div>
-                        <div>
-                          <h3 className="font-semibold text-foreground">{carr.cliente}</h3>
-                          <p className="text-sm text-muted-foreground">{carr.quantidade} toneladas</p>
-                          <p className="text-xs text-muted-foreground">{carr.data_retirada} • {carr.horario}</p>
-                          <p className="text-xs text-muted-foreground">Placa: <span className="font-medium">{carr.placa}</span></p>
-                          <p className="text-xs text-muted-foreground">Motorista: <span className="font-medium">{carr.motorista}</span></p>
-                          {carr.numero_nf && (
-                            <p className="text-xs text-muted-foreground">Nº NF: <span className="font-medium">{carr.numero_nf}</span></p>
-                          )}
-                          <p className="text-xs text-muted-foreground mt-1">Etapa: <span className="font-medium">{getEtapaLabel(carr.etapa_atual)}</span></p>
+                        <div className="flex flex-col items-end gap-2">
+                          {/* Badge da etapa (onde estava o status) */}
+                          <Badge className={`${etapaInfo.cor} border-0 font-medium`}>
+                            {etapaInfo.nome}
+                          </Badge>
+                          <div className="text-xs text-muted-foreground">Fotos: <span className="font-semibold">{carr.fotosTotal}</span></div>
                         </div>
-                      </div>
-                      <div className="flex flex-col items-end gap-2">
-                        <Badge variant={getStatusBadgeVariant(carr.status)} className={getStatusColor(carr.status)}>
-                          {getStatusLabel(carr.status)}
-                        </Badge>
-                        <div className="text-xs text-muted-foreground">Fotos: <span className="font-semibold">{carr.fotosTotal}</span></div>
                       </div>
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </Link>
-          ))}
+                  </CardContent>
+                </Card>
+              </Link>
+            );
+          })}
           {filteredCarregamentos.length === 0 && (
             <div className="text-sm text-muted-foreground py-8 text-center">
               Nenhum carregamento encontrado.
