@@ -55,16 +55,21 @@ const CarregamentoDetalhe = () => {
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
+      console.log("🔍 [DEBUG] CarregamentoDetalhe - User ID:", data.user?.id);
       setUserId(data.user?.id ?? null);
     });
 
     const fetchRoles = async () => {
       if (!userId) return;
+      console.log("🔍 [DEBUG] CarregamentoDetalhe - Fetching roles for user:", userId);
       const { data } = await supabase
         .from("user_roles")
         .select("role")
         .eq("user_id", userId);
-      if (data) setRoles(data.map((r) => r.role));
+      if (data) {
+        console.log("🔍 [DEBUG] CarregamentoDetalhe - User roles:", data.map((r) => r.role));
+        setRoles(data.map((r) => r.role));
+      }
     };
     fetchRoles();
   }, [userId]);
@@ -72,12 +77,15 @@ const CarregamentoDetalhe = () => {
   useEffect(() => {
     const fetchVinculos = async () => {
       if (!userId || roles.length === 0) return;
+      console.log("🔍 [DEBUG] CarregamentoDetalhe - Fetching vínculos for roles:", roles);
+      
       if (roles.includes("cliente")) {
         const { data: cliente } = await supabase
           .from("clientes")
           .select("id")
           .eq("user_id", userId)
           .single();
+        console.log("🔍 [DEBUG] CarregamentoDetalhe - Cliente ID:", cliente?.id);
         setClienteId(cliente?.id ?? null);
       } else {
         setClienteId(null);
@@ -88,6 +96,7 @@ const CarregamentoDetalhe = () => {
           .select("id")
           .eq("user_id", userId)
           .single();
+        console.log("🔍 [DEBUG] CarregamentoDetalhe - Armazem ID:", armazem?.id);
         setArmazemId(armazem?.id ?? null);
       } else {
         setArmazemId(null);
@@ -100,6 +109,8 @@ const CarregamentoDetalhe = () => {
   const { data: carregamento, isLoading, error } = useQuery({
     queryKey: ["carregamento-detalhe", id, clienteId, armazemId, roles],
     queryFn: async () => {
+      console.log("🔍 [DEBUG] CarregamentoDetalhe - Fetching carregamento:", id);
+      
       let query = supabase
         .from("carregamentos")
         .select(`
@@ -143,7 +154,12 @@ const CarregamentoDetalhe = () => {
         .single();
 
       const { data, error } = await query;
-      if (error) throw error;
+      if (error) {
+        console.error("❌ [ERROR] CarregamentoDetalhe - Erro ao buscar carregamento:", error);
+        throw error;
+      }
+      
+      console.log("✅ [SUCCESS] CarregamentoDetalhe - Carregamento carregado:", data);
       return data;
     },
     enabled:
@@ -158,33 +174,44 @@ const CarregamentoDetalhe = () => {
   // Mutation para avançar etapa
   const proximaEtapaMutation = useMutation({
     mutationFn: async () => {
-      if (!selectedEtapa || !carregamento) throw new Error("Dados inválidos");
+      if (!selectedEtapa || !carregamento) {
+        console.error("❌ [ERROR] CarregamentoDetalhe - Dados inválidos para próxima etapa");
+        throw new Error("Dados inválidos");
+      }
       
       const etapaAtual = carregamento.etapa_atual;
       const proximaEtapa = etapaAtual + 1;
       const agora = new Date().toISOString();
       
+      console.log("🔍 [DEBUG] CarregamentoDetalhe - Avançando da etapa", etapaAtual, "para", proximaEtapa);
+      
       // Preparar dados para atualização
       const updateData: any = {
         etapa_atual: proximaEtapa,
+        updated_by: userId,
       };
 
       // Definir campo de data baseado na etapa atual
       const etapaConfig = ETAPAS.find(e => e.id === etapaAtual);
       if (etapaConfig?.campo_data) {
         updateData[etapaConfig.campo_data] = agora;
+        console.log("🔍 [DEBUG] CarregamentoDetalhe - Definindo", etapaConfig.campo_data, "=", agora);
       }
       if (etapaConfig?.campo_obs && stageObs.trim()) {
         updateData[etapaConfig.campo_obs] = stageObs.trim();
+        console.log("🔍 [DEBUG] CarregamentoDetalhe - Definindo", etapaConfig.campo_obs, "=", stageObs.trim());
       }
 
       // Se chegou na etapa 6, marcar como finalizado
       if (proximaEtapa === 6) {
         updateData.status = "finalizado";
+        console.log("🔍 [DEBUG] CarregamentoDetalhe - Marcando como finalizado");
       }
 
       // Upload de arquivos se necessário
       if (stageFile) {
+        console.log("🔍 [DEBUG] CarregamentoDetalhe - Fazendo upload do arquivo:", stageFile.name);
+        
         const fileExt = stageFile.name.split('.').pop();
         let bucket = '';
         let fileName = '';
@@ -193,43 +220,63 @@ const CarregamentoDetalhe = () => {
           // Etapa 5: Documentação (PDF)
           bucket = 'carregamentos-documentos';
           fileName = `${carregamento.id}_nota_fiscal_${Date.now()}.${fileExt}`;
+          console.log("🔍 [DEBUG] CarregamentoDetalhe - Upload para bucket documentos:", fileName);
         } else {
           // Outras etapas: Fotos
           bucket = 'carregamento-fotos';
           fileName = `${carregamento.id}_etapa_${etapaAtual}_${Date.now()}.${fileExt}`;
+          console.log("🔍 [DEBUG] CarregamentoDetalhe - Upload para bucket fotos:", fileName);
         }
         
         const { data: uploadData, error: uploadError } = await supabase.storage
           .from(bucket)
           .upload(fileName, stageFile);
 
-        if (uploadError) throw uploadError;
+        if (uploadError) {
+          console.error("❌ [ERROR] CarregamentoDetalhe - Erro no upload:", uploadError);
+          throw uploadError;
+        }
+
+        console.log("✅ [SUCCESS] CarregamentoDetalhe - Upload realizado:", uploadData);
 
         const { data: urlData } = supabase.storage
           .from(bucket)
           .getPublicUrl(fileName);
 
+        console.log("🔍 [DEBUG] CarregamentoDetalhe - URL pública gerada:", urlData.publicUrl);
+
         // Definir campo URL baseado na etapa
         if (etapaConfig?.campo_url) {
           updateData[etapaConfig.campo_url] = urlData.publicUrl;
+          console.log("🔍 [DEBUG] CarregamentoDetalhe - Definindo", etapaConfig.campo_url, "=", urlData.publicUrl);
         }
       }
 
       // Upload de XML se for etapa 5
       if (stageFileXml && etapaAtual === 5) {
+        console.log("🔍 [DEBUG] CarregamentoDetalhe - Fazendo upload do XML:", stageFileXml.name);
+        
         const fileName = `${carregamento.id}_xml_${Date.now()}.xml`;
         
         const { data: uploadData, error: uploadError } = await supabase.storage
           .from('carregamentos-documentos')
           .upload(fileName, stageFileXml);
 
-        if (uploadError) throw uploadError;
+        if (uploadError) {
+          console.error("❌ [ERROR] CarregamentoDetalhe - Erro no upload XML:", uploadError);
+          throw uploadError;
+        }
+
+        console.log("✅ [SUCCESS] CarregamentoDetalhe - Upload XML realizado:", uploadData);
 
         const { data: urlData } = supabase.storage
           .from('carregamentos-documentos')
           .getPublicUrl(fileName);
         updateData.url_xml = urlData.publicUrl;
+        console.log("🔍 [DEBUG] CarregamentoDetalhe - URL XML definida:", urlData.publicUrl);
       }
+
+      console.log("🔍 [DEBUG] CarregamentoDetalhe - Dados para atualização:", updateData);
 
       // Atualizar carregamento
       const { error: updateError } = await supabase
@@ -237,11 +284,17 @@ const CarregamentoDetalhe = () => {
         .update(updateData)
         .eq('id', carregamento.id);
 
-      if (updateError) throw updateError;
+      if (updateError) {
+        console.error("❌ [ERROR] CarregamentoDetalhe - Erro na atualização:", updateError);
+        throw updateError;
+      }
 
+      console.log("✅ [SUCCESS] CarregamentoDetalhe - Carregamento atualizado com sucesso");
       return { proximaEtapa };
     },
     onSuccess: ({ proximaEtapa }) => {
+      console.log("✅ [SUCCESS] CarregamentoDetalhe - Etapa avançada para:", proximaEtapa);
+      
       toast({
         title: "Etapa avançada com sucesso!",
         description: `Carregamento avançou para: ${ETAPAS.find(e => e.id === proximaEtapa)?.nome}`,
@@ -259,6 +312,8 @@ const CarregamentoDetalhe = () => {
       setSelectedEtapa(proximaEtapa);
     },
     onError: (error) => {
+      console.error("❌ [ERROR] CarregamentoDetalhe - Erro ao avançar etapa:", error);
+      
       toast({
         title: "Erro ao avançar etapa",
         description: error instanceof Error ? error.message : "Erro desconhecido",
@@ -269,6 +324,7 @@ const CarregamentoDetalhe = () => {
 
   useEffect(() => {
     if (carregamento?.etapa_atual != null) {
+      console.log("🔍 [DEBUG] CarregamentoDetalhe - Selecionando etapa atual:", carregamento.etapa_atual);
       setSelectedEtapa(carregamento.etapa_atual);
     }
   }, [carregamento]);
@@ -280,14 +336,23 @@ const CarregamentoDetalhe = () => {
       userId &&
       roles.length > 0
     ) {
-      if (
-        !(
-          roles.includes("admin") ||
-          roles.includes("logistica") ||
-          (roles.includes("cliente") && clienteId && carregamento.cliente_id === clienteId) ||
-          (roles.includes("armazem") && armazemId && carregamento.armazem_id === armazemId)
-        )
-      ) {
+      const hasPermission = 
+        roles.includes("admin") ||
+        roles.includes("logistica") ||
+        (roles.includes("cliente") && clienteId && carregamento.cliente_id === clienteId) ||
+        (roles.includes("armazem") && armazemId && carregamento.armazem_id === armazemId);
+      
+      console.log("🔍 [DEBUG] CarregamentoDetalhe - Verificação de permissão:", {
+        hasPermission,
+        roles,
+        clienteId,
+        armazemId,
+        carregamento_cliente_id: carregamento.cliente_id,
+        carregamento_armazem_id: carregamento.armazem_id
+      });
+      
+      if (!hasPermission) {
+        console.log("❌ [ERROR] CarregamentoDetalhe - Sem permissão, redirecionando");
         navigate("/carregamentos");
       }
     }
@@ -423,6 +488,7 @@ const CarregamentoDetalhe = () => {
                   }}
                   onClick={() => {
                     if (podeClicar) {
+                      console.log("🔍 [DEBUG] CarregamentoDetalhe - Etapa selecionada:", etapaIndex);
                       setSelectedEtapa(etapaIndex);
                     }
                   }}
@@ -441,6 +507,7 @@ const CarregamentoDetalhe = () => {
                   }}
                   onClick={() => {
                     if (podeClicar) {
+                      console.log("🔍 [DEBUG] CarregamentoDetalhe - Etapa selecionada (texto):", etapaIndex);
                       setSelectedEtapa(etapaIndex);
                     }
                   }}
@@ -476,6 +543,18 @@ const CarregamentoDetalhe = () => {
                       carregamento?.armazem_id === armazemId && 
                       isEtapaAtual && 
                       !isEtapaFinalizada;
+
+    console.log("🔍 [DEBUG] CarregamentoDetalhe - renderAreaEtapas:", {
+      selectedEtapa,
+      etapaAtual,
+      isEtapaConcluida,
+      isEtapaAtual,
+      isEtapaFutura,
+      podeEditar,
+      roles,
+      armazemId,
+      carregamento_armazem_id: carregamento?.armazem_id
+    });
 
     // Obter dados da etapa
     const getEtapaData = () => {
@@ -536,7 +615,10 @@ const CarregamentoDetalhe = () => {
                 disabled={!stageFile || proximaEtapaMutation.isPending}
                 size="sm"
                 className="px-6"
-                onClick={() => proximaEtapaMutation.mutate()}
+                onClick={() => {
+                  console.log("🔍 [DEBUG] CarregamentoDetalhe - Iniciando próxima etapa");
+                  proximaEtapaMutation.mutate();
+                }}
               >
                 {proximaEtapaMutation.isPending ? (
                   <Loader2 className="w-4 h-4 animate-spin mr-2" />
@@ -635,7 +717,11 @@ const CarregamentoDetalhe = () => {
                 <Input
                   type="file"
                   accept={isEtapaDoc ? ".pdf" : "image/*"}
-                  onChange={e => setStageFile(e.target.files?.[0] ?? null)}
+                  onChange={e => {
+                    const file = e.target.files?.[0] ?? null;
+                    console.log("🔍 [DEBUG] CarregamentoDetalhe - Arquivo selecionado:", file?.name);
+                    setStageFile(file);
+                  }}
                   className="w-full text-sm"
                   disabled={proximaEtapaMutation.isPending}
                 />
@@ -649,7 +735,11 @@ const CarregamentoDetalhe = () => {
                   <Input
                     type="file"
                     accept=".xml"
-                    onChange={e => setStageFileXml(e.target.files?.[0] ?? null)}
+                    onChange={e => {
+                      const file = e.target.files?.[0] ?? null;
+                      console.log("🔍 [DEBUG] CarregamentoDetalhe - Arquivo XML selecionado:", file?.name);
+                      setStageFileXml(file);
+                    }}
                     className="w-full text-sm"
                     disabled={proximaEtapaMutation.isPending}
                   />
