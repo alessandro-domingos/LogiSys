@@ -146,15 +146,10 @@ const CarregamentoDetalhe = () => {
 
   useEffect(() => {
     if (carregamento?.etapa_atual != null) {
-      // Se for usuário armazém, mostrar a próxima etapa a ser executada
-      // Se for cliente/admin, mostrar a etapa atual
-      if (roles.includes("armazem")) {
-        setSelectedEtapa(carregamento.etapa_atual < 6 ? carregamento.etapa_atual + 1 : 6);
-      } else {
-        setSelectedEtapa(carregamento.etapa_atual > 0 ? carregamento.etapa_atual : 1);
-      }
+      // Sempre iniciar na etapa atual
+      setSelectedEtapa(carregamento.etapa_atual);
     }
-  }, [carregamento, roles]);
+  }, [carregamento]);
 
   useEffect(() => {
     if (
@@ -197,7 +192,9 @@ const CarregamentoDetalhe = () => {
         <div className="flex items-end justify-between w-full max-w-4xl mx-auto relative">
           {ETAPAS.map((etapa, idx) => {
             const etapaIndex = etapa.id;
-            const isFinalizada = (carregamento?.etapa_atual ?? 0) >= etapaIndex;
+            const etapaAtual = carregamento?.etapa_atual ?? 1;
+            const isFinalizada = etapaIndex < etapaAtual;
+            const isAtual = etapaIndex === etapaAtual;
             const isSelected = selectedEtapa === etapaIndex;
             const podeClicar = true; // Todas as etapas são clicáveis para visualização
             
@@ -227,6 +224,7 @@ const CarregamentoDetalhe = () => {
                     rounded-full flex items-center justify-center transition-all
                     ${isSelected ? "bg-primary text-white border-2 border-primary shadow-lg" :
                       isFinalizada ? "bg-green-500 text-white" :
+                      isAtual ? "bg-blue-500 text-white" :
                         "bg-gray-200 text-gray-600"}
                     ${podeClicar ? "cursor-pointer hover:scale-105" : "cursor-default"}
                   `}
@@ -244,7 +242,7 @@ const CarregamentoDetalhe = () => {
                     }
                   }}
                 >
-                  {isFinalizada && !isSelected ? <CheckCircle className="w-6 h-6" /> : etapaIndex}
+                  {isFinalizada ? <CheckCircle className="w-6 h-6" /> : etapaIndex}
                 </div>
                 <div
                   className={
@@ -292,19 +290,19 @@ const CarregamentoDetalhe = () => {
 
     const etapaNome = ETAPAS.find(e => e.id === selectedEtapa)?.nome || "Etapa";
     const isEtapaDoc = selectedEtapa === 5;
-    const isEtapaFinalizada = selectedEtapa === 6;
-    const etapaAtual = carregamento?.etapa_atual ?? 0;
-    const isEtapaConcluida = etapaAtual >= selectedEtapa;
-    const isProximaEtapa = etapaAtual + 1 === selectedEtapa;
-    const isEtapaFutura = selectedEtapa > etapaAtual + 1;
+    const etapaAtual = carregamento?.etapa_atual ?? 1;
+    const isEtapaConcluida = selectedEtapa < etapaAtual;
+    const isEtapaAtual = selectedEtapa === etapaAtual;
+    const isEtapaFutura = selectedEtapa > etapaAtual;
+    const isEtapaFinalizada = selectedEtapa === 6 && etapaAtual === 6;
     
-    // Só usuário armazém pode editar e apenas a próxima etapa na sequência
+    // Só usuário armazém pode editar a etapa atual
     const podeEditar = roles.includes("armazem") && 
                       carregamento?.armazem_id === armazemId && 
-                      isProximaEtapa && 
+                      isEtapaAtual && 
                       !isEtapaFinalizada;
 
-    // Obter dados da etapa atual
+    // Obter dados da etapa
     const getEtapaData = () => {
       switch (selectedEtapa) {
         case 1:
@@ -352,6 +350,7 @@ const CarregamentoDetalhe = () => {
           </div>
 
           {isEtapaFinalizada ? (
+            // Etapa 6 finalizada - processo concluído
             <div className="text-center py-8">
               <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
               <h3 className="text-lg font-medium text-foreground mb-2">Processo Finalizado</h3>
@@ -360,7 +359,7 @@ const CarregamentoDetalhe = () => {
               </p>
             </div>
           ) : isEtapaConcluida ? (
-            // Etapa concluída - mostrar arquivos e observações
+            // Etapa concluída - mostrar arquivos e observações (somente leitura)
             <div className="space-y-6">
               <div className="bg-green-50 border border-green-200 rounded-lg p-4">
                 <div className="flex items-center gap-2 mb-3">
@@ -371,7 +370,7 @@ const CarregamentoDetalhe = () => {
                 {etapaData.observacao && (
                   <div className="mb-4">
                     <span className="text-sm font-medium text-green-700">Observações:</span>
-                    <p className="text-sm text-green-600 mt-1">{etapaData.observacao}</p>
+                    <p className="text-sm text-green-600 mt-1 bg-white p-2 rounded border">{etapaData.observacao}</p>
                   </div>
                 )}
 
@@ -381,49 +380,49 @@ const CarregamentoDetalhe = () => {
                     // Etapa de documentação - mostrar PDF e XML
                     <>
                       {carregamento?.url_nota_fiscal && (
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 p-2 bg-white rounded border">
                           <FileText className="w-4 h-4 text-green-600" />
                           <a 
                             href={carregamento.url_nota_fiscal} 
                             target="_blank" 
                             rel="noopener noreferrer"
-                            className="text-green-700 hover:text-green-800 underline text-sm"
+                            className="text-green-700 hover:text-green-800 underline text-sm flex-1"
                           >
                             Baixar Nota Fiscal (PDF)
                           </a>
-                          <Download className="w-3 h-3 text-green-600" />
+                          <Download className="w-4 h-4 text-green-600" />
                         </div>
                       )}
                       {carregamento?.url_xml && (
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 p-2 bg-white rounded border">
                           <FileText className="w-4 h-4 text-green-600" />
                           <a 
                             href={carregamento.url_xml} 
                             target="_blank" 
                             rel="noopener noreferrer"
-                            className="text-green-700 hover:text-green-800 underline text-sm"
+                            className="text-green-700 hover:text-green-800 underline text-sm flex-1"
                           >
                             Baixar Arquivo XML
                           </a>
-                          <Download className="w-3 h-3 text-green-600" />
+                          <Download className="w-4 h-4 text-green-600" />
                         </div>
                       )}
                     </>
                   ) : (
-                    // Outras etapas - mostrar foto (simulado por enquanto)
-                    <div className="flex items-center gap-2">
+                    // Outras etapas - mostrar foto (simulado por enquanto - será implementado depois)
+                    <div className="flex items-center gap-2 p-2 bg-white rounded border">
                       <Image className="w-4 h-4 text-green-600" />
-                      <span className="text-green-700 text-sm">
+                      <span className="text-green-700 text-sm flex-1">
                         Foto anexada - {etapaNome}
                       </span>
-                      <Download className="w-3 h-3 text-green-600" />
+                      <Download className="w-4 h-4 text-green-600" />
                     </div>
                   )}
                 </div>
               </div>
             </div>
           ) : podeEditar ? (
-            // Próxima etapa - formulário de edição
+            // Etapa atual - usuário armazém pode editar
             <>
               <div className="space-y-4">
                 <div>
@@ -481,7 +480,7 @@ const CarregamentoDetalhe = () => {
               <p>Aguardando a etapa anterior ser finalizada.</p>
             </div>
           ) : (
-            // Etapa atual mas usuário não pode editar
+            // Etapa atual mas usuário não pode editar (admin, logística, cliente)
             <div className="text-center py-8 text-muted-foreground">
               <p>Aguardando execução desta etapa pelo armazém.</p>
             </div>
