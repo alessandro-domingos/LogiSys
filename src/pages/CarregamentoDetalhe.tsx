@@ -11,12 +11,12 @@ import { useToast } from "@/components/ui/use-toast";
 import { Loader2, CheckCircle, ArrowRight, Download, FileText, Image, User, Truck, Calendar, Hash, Clock } from "lucide-react";
 
 const ETAPAS = [
-  { id: 1, nome: "Chegada", titulo: "Chegada do Caminhão", campo_data: "data_chegada", campo_obs: "observacao_chegada" },
-  { id: 2, nome: "Início Carregamento", titulo: "Início do Carregamento", campo_data: "data_inicio", campo_obs: "observacao_inicio" },
-  { id: 3, nome: "Carregando", titulo: "Carregando", campo_data: "data_carregando", campo_obs: "observacao_carregando" },
-  { id: 4, nome: "Carreg. Finalizado", titulo: "Carregamento Finalizado", campo_data: "data_finalizacao", campo_obs: "observacao_finalizacao" },
-  { id: 5, nome: "Documentação", titulo: "Anexar Documentação", campo_data: "data_documentacao", campo_obs: "observacao_documentacao" },
-  { id: 6, nome: "Finalizado", titulo: "Finalizado", campo_data: null, campo_obs: null },
+  { id: 1, nome: "Chegada", titulo: "Chegada do Caminhão", campo_data: "data_chegada", campo_obs: "observacao_chegada", campo_url: "url_foto_chegada" },
+  { id: 2, nome: "Início Carregamento", titulo: "Início do Carregamento", campo_data: "data_inicio", campo_obs: "observacao_inicio", campo_url: "url_foto_inicio" },
+  { id: 3, nome: "Carregando", titulo: "Carregando", campo_data: "data_carregando", campo_obs: "observacao_carregando", campo_url: "url_foto_carregando" },
+  { id: 4, nome: "Carreg. Finalizado", titulo: "Carregamento Finalizado", campo_data: "data_finalizacao", campo_obs: "observacao_finalizacao", campo_url: "url_foto_finalizacao" },
+  { id: 5, nome: "Documentação", titulo: "Anexar Documentação", campo_data: "data_documentacao", campo_obs: "observacao_documentacao", campo_url: "url_nota_fiscal" },
+  { id: 6, nome: "Finalizado", titulo: "Finalizado", campo_data: null, campo_obs: null, campo_url: null },
 ];
 
 const formatarDataHora = (v?: string | null) => {
@@ -122,6 +122,10 @@ const CarregamentoDetalhe = () => {
           data_documentacao,
           url_nota_fiscal,
           url_xml,
+          url_foto_chegada,
+          url_foto_inicio,
+          url_foto_carregando,
+          url_foto_finalizacao,
           agendamento:agendamentos!carregamentos_agendamento_id_fkey (
             id,
             data_retirada,
@@ -182,20 +186,32 @@ const CarregamentoDetalhe = () => {
       // Upload de arquivos se necessário
       if (stageFile) {
         const fileExt = stageFile.name.split('.').pop();
-        const fileName = `${carregamento.id}_etapa_${etapaAtual}_${Date.now()}.${fileExt}`;
+        let bucket = '';
+        let fileName = '';
+        
+        if (etapaAtual === 5) {
+          // Etapa 5: Documentação (PDF)
+          bucket = 'carregamentos-documentos';
+          fileName = `${carregamento.id}_nota_fiscal_${Date.now()}.${fileExt}`;
+        } else {
+          // Outras etapas: Fotos
+          bucket = 'carregamento-fotos';
+          fileName = `${carregamento.id}_etapa_${etapaAtual}_${Date.now()}.${fileExt}`;
+        }
         
         const { data: uploadData, error: uploadError } = await supabase.storage
-          .from('carregamentos')
+          .from(bucket)
           .upload(fileName, stageFile);
 
         if (uploadError) throw uploadError;
 
-        // Para etapa 5 (documentação), salvar URL da nota fiscal
-        if (etapaAtual === 5) {
-          const { data: urlData } = supabase.storage
-            .from('carregamentos')
-            .getPublicUrl(fileName);
-          updateData.url_nota_fiscal = urlData.publicUrl;
+        const { data: urlData } = supabase.storage
+          .from(bucket)
+          .getPublicUrl(fileName);
+
+        // Definir campo URL baseado na etapa
+        if (etapaConfig?.campo_url) {
+          updateData[etapaConfig.campo_url] = urlData.publicUrl;
         }
       }
 
@@ -204,13 +220,13 @@ const CarregamentoDetalhe = () => {
         const fileName = `${carregamento.id}_xml_${Date.now()}.xml`;
         
         const { data: uploadData, error: uploadError } = await supabase.storage
-          .from('carregamentos')
+          .from('carregamentos-documentos')
           .upload(fileName, stageFileXml);
 
         if (uploadError) throw uploadError;
 
         const { data: urlData } = supabase.storage
-          .from('carregamentos')
+          .from('carregamentos-documentos')
           .getPublicUrl(fileName);
         updateData.url_xml = urlData.publicUrl;
       }
@@ -467,30 +483,36 @@ const CarregamentoDetalhe = () => {
         case 1:
           return {
             data: carregamento?.data_chegada,
-            observacao: carregamento?.observacao_chegada
+            observacao: carregamento?.observacao_chegada,
+            url_arquivo: carregamento?.url_foto_chegada
           };
         case 2:
           return {
             data: carregamento?.data_inicio,
-            observacao: carregamento?.observacao_inicio
+            observacao: carregamento?.observacao_inicio,
+            url_arquivo: carregamento?.url_foto_inicio
           };
         case 3:
           return {
             data: carregamento?.data_carregando,
-            observacao: carregamento?.observacao_carregando
+            observacao: carregamento?.observacao_carregando,
+            url_arquivo: carregamento?.url_foto_carregando
           };
         case 4:
           return {
             data: carregamento?.data_finalizacao,
-            observacao: carregamento?.observacao_finalizacao
+            observacao: carregamento?.observacao_finalizacao,
+            url_arquivo: carregamento?.url_foto_finalizacao
           };
         case 5:
           return {
             data: carregamento?.data_documentacao,
-            observacao: carregamento?.observacao_documentacao
+            observacao: carregamento?.observacao_documentacao,
+            url_arquivo: carregamento?.url_nota_fiscal,
+            url_xml: carregamento?.url_xml
           };
         default:
-          return { data: null, observacao: null };
+          return { data: null, observacao: null, url_arquivo: null };
       }
     };
 
@@ -554,11 +576,11 @@ const CarregamentoDetalhe = () => {
                   {isEtapaDoc ? (
                     // Etapa de documentação - mostrar PDF e XML
                     <>
-                      {carregamento?.url_nota_fiscal && (
+                      {etapaData.url_arquivo && (
                         <div className="flex items-center gap-2 p-2 bg-white rounded border">
                           <FileText className="w-3 h-3 text-green-600" />
                           <a 
-                            href={carregamento.url_nota_fiscal} 
+                            href={etapaData.url_arquivo} 
                             target="_blank" 
                             rel="noopener noreferrer"
                             className="text-green-700 hover:text-green-800 underline text-xs flex-1"
@@ -568,11 +590,11 @@ const CarregamentoDetalhe = () => {
                           <Download className="w-3 h-3 text-green-600" />
                         </div>
                       )}
-                      {carregamento?.url_xml && (
+                      {etapaData.url_xml && (
                         <div className="flex items-center gap-2 p-2 bg-white rounded border">
                           <FileText className="w-3 h-3 text-green-600" />
                           <a 
-                            href={carregamento.url_xml} 
+                            href={etapaData.url_xml} 
                             target="_blank" 
                             rel="noopener noreferrer"
                             className="text-green-700 hover:text-green-800 underline text-xs flex-1"
@@ -585,13 +607,20 @@ const CarregamentoDetalhe = () => {
                     </>
                   ) : (
                     // Outras etapas - mostrar foto
-                    <div className="flex items-center gap-2 p-2 bg-white rounded border">
-                      <Image className="w-3 h-3 text-green-600" />
-                      <span className="text-green-700 text-xs flex-1">
-                        Foto anexada - {etapa?.nome}
-                      </span>
-                      <Download className="w-3 h-3 text-green-600" />
-                    </div>
+                    etapaData.url_arquivo && (
+                      <div className="flex items-center gap-2 p-2 bg-white rounded border">
+                        <Image className="w-3 h-3 text-green-600" />
+                        <a 
+                          href={etapaData.url_arquivo} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-green-700 hover:text-green-800 underline text-xs flex-1"
+                        >
+                          Ver foto - {etapa?.nome}
+                        </a>
+                        <Download className="w-3 h-3 text-green-600" />
+                      </div>
+                    )
                   )}
                 </div>
               </div>
