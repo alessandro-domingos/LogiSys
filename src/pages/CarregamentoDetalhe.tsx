@@ -7,7 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, CheckCircle, ArrowRight } from "lucide-react";
+import { Loader2, CheckCircle, ArrowRight, Download, FileText, Image } from "lucide-react";
 
 const ETAPAS = [
   { id: 1, nome: "Chegada" },
@@ -293,8 +293,16 @@ const CarregamentoDetalhe = () => {
     const etapaNome = ETAPAS.find(e => e.id === selectedEtapa)?.nome || "Etapa";
     const isEtapaDoc = selectedEtapa === 5;
     const isEtapaFinalizada = selectedEtapa === 6;
-    const isEtapaJaConcluida = (carregamento?.etapa_atual ?? 0) >= selectedEtapa;
-    const podeEditar = roles.includes("armazem") && !isEtapaJaConcluida && !isEtapaFinalizada;
+    const etapaAtual = carregamento?.etapa_atual ?? 0;
+    const isEtapaConcluida = etapaAtual >= selectedEtapa;
+    const isProximaEtapa = etapaAtual + 1 === selectedEtapa;
+    const isEtapaFutura = selectedEtapa > etapaAtual + 1;
+    
+    // Só usuário armazém pode editar e apenas a próxima etapa na sequência
+    const podeEditar = roles.includes("armazem") && 
+                      carregamento?.armazem_id === armazemId && 
+                      isProximaEtapa && 
+                      !isEtapaFinalizada;
 
     // Obter dados da etapa atual
     const getEtapaData = () => {
@@ -351,86 +359,132 @@ const CarregamentoDetalhe = () => {
                 O carregamento foi concluído com sucesso.
               </p>
             </div>
-          ) : (
-            <>
-              {/* Mostrar dados existentes se a etapa já foi concluída */}
-              {isEtapaJaConcluida && (
-                <div className="bg-green-50 border border-green-200 rounded-lg p-4 space-y-3">
-                  <div className="flex items-center gap-2">
-                    <CheckCircle className="w-5 h-5 text-green-600" />
-                    <span className="font-medium text-green-800">Etapa Concluída</span>
+          ) : isEtapaConcluida ? (
+            // Etapa concluída - mostrar arquivos e observações
+            <div className="space-y-6">
+              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <CheckCircle className="w-5 h-5 text-green-600" />
+                  <span className="font-medium text-green-800">Etapa Concluída</span>
+                </div>
+                
+                {etapaData.observacao && (
+                  <div className="mb-4">
+                    <span className="text-sm font-medium text-green-700">Observações:</span>
+                    <p className="text-sm text-green-600 mt-1">{etapaData.observacao}</p>
                   </div>
-                  {etapaData.observacao && (
-                    <div>
-                      <span className="text-sm font-medium text-green-700">Observações:</span>
-                      <p className="text-sm text-green-600 mt-1">{etapaData.observacao}</p>
+                )}
+
+                {/* Mostrar links para arquivos */}
+                <div className="space-y-3">
+                  {isEtapaDoc ? (
+                    // Etapa de documentação - mostrar PDF e XML
+                    <>
+                      {carregamento?.url_nota_fiscal && (
+                        <div className="flex items-center gap-2">
+                          <FileText className="w-4 h-4 text-green-600" />
+                          <a 
+                            href={carregamento.url_nota_fiscal} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="text-green-700 hover:text-green-800 underline text-sm"
+                          >
+                            Baixar Nota Fiscal (PDF)
+                          </a>
+                          <Download className="w-3 h-3 text-green-600" />
+                        </div>
+                      )}
+                      {carregamento?.url_xml && (
+                        <div className="flex items-center gap-2">
+                          <FileText className="w-4 h-4 text-green-600" />
+                          <a 
+                            href={carregamento.url_xml} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="text-green-700 hover:text-green-800 underline text-sm"
+                          >
+                            Baixar Arquivo XML
+                          </a>
+                          <Download className="w-3 h-3 text-green-600" />
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    // Outras etapas - mostrar foto (simulado por enquanto)
+                    <div className="flex items-center gap-2">
+                      <Image className="w-4 h-4 text-green-600" />
+                      <span className="text-green-700 text-sm">
+                        Foto anexada - {etapaNome}
+                      </span>
+                      <Download className="w-3 h-3 text-green-600" />
                     </div>
                   )}
                 </div>
-              )}
-
-              {/* Formulário para edição (apenas se pode editar) */}
-              {podeEditar && (
-                <>
-                  <div className="space-y-4">
-                    <div>
-                      <label className="text-base font-semibold block mb-2">
-                        {isEtapaDoc ? "Anexar Nota Fiscal (PDF) *" : "Anexar foto obrigatória *"}
-                      </label>
-                      <Input
-                        type="file"
-                        accept={isEtapaDoc ? ".pdf" : "image/*"}
-                        onChange={e => setStageFile(e.target.files?.[0] ?? null)}
-                        className="w-full"
-                      />
-                    </div>
-
-                    {isEtapaDoc && (
-                      <div>
-                        <label className="text-base font-semibold block mb-2">
-                          Anexar Arquivo XML
-                        </label>
-                        <Input
-                          type="file"
-                          accept=".xml"
-                          onChange={e => setStageFileXml(e.target.files?.[0] ?? null)}
-                          className="w-full"
-                        />
-                      </div>
-                    )}
-
-                    <div>
-                      <label className="text-base font-semibold block mb-2">
-                        Observações (opcional)
-                      </label>
-                      <Textarea
-                        placeholder={`Digite observações sobre ${etapaNome.toLowerCase()}...`}
-                        value={stageObs}
-                        onChange={e => setStageObs(e.target.value)}
-                        rows={3}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="flex justify-end pt-4">
-                    <Button
-                      disabled={!stageFile}
-                      size="lg"
-                      className="px-8"
-                    >
-                      {selectedEtapa === 5 ? "Finalizar Carregamento" : "Próxima Etapa"}
-                    </Button>
-                  </div>
-                </>
-              )}
-
-              {/* Visualização apenas (se não pode editar mas etapa não está concluída) */}
-              {!podeEditar && !isEtapaJaConcluida && (
-                <div className="text-center py-8 text-muted-foreground">
-                  <p>Aguardando execução desta etapa pelo armazém.</p>
+              </div>
+            </div>
+          ) : podeEditar ? (
+            // Próxima etapa - formulário de edição
+            <>
+              <div className="space-y-4">
+                <div>
+                  <label className="text-base font-semibold block mb-2">
+                    {isEtapaDoc ? "Anexar Nota Fiscal (PDF) *" : "Anexar foto obrigatória *"}
+                  </label>
+                  <Input
+                    type="file"
+                    accept={isEtapaDoc ? ".pdf" : "image/*"}
+                    onChange={e => setStageFile(e.target.files?.[0] ?? null)}
+                    className="w-full"
+                  />
                 </div>
-              )}
+
+                {isEtapaDoc && (
+                  <div>
+                    <label className="text-base font-semibold block mb-2">
+                      Anexar Arquivo XML
+                    </label>
+                    <Input
+                      type="file"
+                      accept=".xml"
+                      onChange={e => setStageFileXml(e.target.files?.[0] ?? null)}
+                      className="w-full"
+                    />
+                  </div>
+                )}
+
+                <div>
+                  <label className="text-base font-semibold block mb-2">
+                    Observações (opcional)
+                  </label>
+                  <Textarea
+                    placeholder={`Digite observações sobre ${etapaNome.toLowerCase()}...`}
+                    value={stageObs}
+                    onChange={e => setStageObs(e.target.value)}
+                    rows={3}
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end pt-4">
+                <Button
+                  disabled={!stageFile}
+                  size="lg"
+                  className="px-8"
+                >
+                  {selectedEtapa === 5 ? "Finalizar Carregamento" : "Próxima Etapa"}
+                </Button>
+              </div>
             </>
+          ) : isEtapaFutura ? (
+            // Etapa futura - aguardando etapa anterior
+            <div className="text-center py-8 text-muted-foreground">
+              <p>Aguardando a etapa anterior ser finalizada.</p>
+            </div>
+          ) : (
+            // Etapa atual mas usuário não pode editar
+            <div className="text-center py-8 text-muted-foreground">
+              <p>Aguardando execução desta etapa pelo armazém.</p>
+            </div>
           )}
         </CardContent>
       </Card>
