@@ -145,9 +145,15 @@ const CarregamentoDetalhe = () => {
 
   useEffect(() => {
     if (carregamento?.etapa_atual != null) {
-      setSelectedEtapa(carregamento.etapa_atual + 1);
+      // Se for usuário armazém, mostrar a próxima etapa a ser executada
+      // Se for cliente/admin, mostrar a etapa atual
+      if (roles.includes("armazem")) {
+        setSelectedEtapa(carregamento.etapa_atual + 1);
+      } else {
+        setSelectedEtapa(carregamento.etapa_atual);
+      }
     }
-  }, [carregamento]);
+  }, [carregamento, roles]);
 
   useEffect(() => {
     if (
@@ -190,8 +196,10 @@ const CarregamentoDetalhe = () => {
         <div className="flex items-end justify-between w-full max-w-4xl mx-auto relative">
           {ETAPAS.map((etapa, idx) => {
             const etapaIndex = etapa.id;
-            const isFinalizada = (carregamento.etapa_atual ?? 0) + 1 > etapaIndex;
+            const isFinalizada = (carregamento?.etapa_atual ?? 0) >= etapaIndex;
             const isAtual = selectedEtapa === etapaIndex;
+            const podeClicar = isFinalizada || (roles.includes("admin") || roles.includes("logistica"));
+            
             return (
               <div
                 key={etapa.id}
@@ -216,10 +224,11 @@ const CarregamentoDetalhe = () => {
                 )}
                 <div
                   className={`
-                    rounded-full flex items-center justify-center
+                    rounded-full flex items-center justify-center transition-all
                     ${isFinalizada ? "bg-green-200 text-green-800" :
                       isAtual ? "bg-primary text-white border-2 border-primary shadow-lg" :
                         "bg-gray-200 text-gray-500"}
+                    ${podeClicar ? "cursor-pointer hover:scale-105" : "cursor-default"}
                   `}
                   style={{
                     width: 36,
@@ -229,25 +238,44 @@ const CarregamentoDetalhe = () => {
                     marginBottom: 3,
                     boxShadow: isAtual ? "0 2px 6px 0 rgba(80,80,80,.15)" : "none",
                   }}
+                  onClick={() => {
+                    if (podeClicar) {
+                      setSelectedEtapa(etapaIndex);
+                    }
+                  }}
                 >
                   {isFinalizada ? <CheckCircle className="w-6 h-6" /> : etapaIndex}
                 </div>
                 <div
                   className={
                     "text-xs text-center leading-tight " +
-                    (isAtual ? "text-primary" : "text-foreground")
+                    (isAtual ? "text-primary" : "text-foreground") +
+                    (podeClicar ? " cursor-pointer" : "")
                   }
                   style={{
                     minHeight: 32,
                     fontWeight: 400,
                     marginTop: 2,
                   }}
+                  onClick={() => {
+                    if (podeClicar) {
+                      setSelectedEtapa(etapaIndex);
+                    }
+                  }}
                 >
                   {etapa.nome}
                 </div>
                 <div className="text-[11px] text-center text-muted-foreground" style={{ marginTop: 1 }}>
-                  {etapaIndex === 1 && carregamento.data_chegada
+                  {etapaIndex === 1 && carregamento?.data_chegada
                     ? formatarDataHora(carregamento.data_chegada)
+                    : etapaIndex === 2 && carregamento?.data_inicio
+                    ? formatarDataHora(carregamento.data_inicio)
+                    : etapaIndex === 3 && carregamento?.data_carregando
+                    ? formatarDataHora(carregamento.data_carregando)
+                    : etapaIndex === 4 && carregamento?.data_finalizacao
+                    ? formatarDataHora(carregamento.data_finalizacao)
+                    : etapaIndex === 5 && carregamento?.data_documentacao
+                    ? formatarDataHora(carregamento.data_documentacao)
                     : "-"}
                 </div>
               </div>
