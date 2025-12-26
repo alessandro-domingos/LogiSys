@@ -7,7 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, CheckCircle, ArrowRight } from "lucide-react";
+import { Loader2, CheckCircle, ArrowRight, Download, FileText, Image } from "lucide-react";
 
 const ETAPAS = [
   { id: 1, nome: "Chegada" },
@@ -144,12 +144,45 @@ const CarregamentoDetalhe = () => {
         (roles.includes("armazem") && armazemId !== null)),
   });
 
+  // Buscar fotos da etapa selecionada
+  const { data: fotosEtapa } = useQuery({
+    queryKey: ["fotos-etapa", id, selectedEtapa],
+    queryFn: async () => {
+      if (!selectedEtapa || selectedEtapa === 6) return [];
+      
+      const { data, error } = await supabase
+        .from("fotos_carregamento")
+        .select("*")
+        .eq("carregamento_id", id)
+        .eq("etapa", selectedEtapa);
+      
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!id && !!selectedEtapa && selectedEtapa !== 6,
+  });
+
+  // Buscar documentos da etapa 5
+  const { data: documentosEtapa } = useQuery({
+    queryKey: ["documentos-etapa", id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("documentos_carregamento")
+        .select("*")
+        .eq("carregamento_id", id);
+      
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!id && selectedEtapa === 5,
+  });
+
   useEffect(() => {
     if (carregamento?.etapa_atual != null) {
-      // Se for usuário armazém, mostrar a próxima etapa a ser executada
-      // Se for cliente/admin, mostrar a etapa atual
+      // Iniciar sempre na próxima etapa a ser executada (para armazém) ou etapa atual (para outros)
       if (roles.includes("armazem")) {
-        setSelectedEtapa(carregamento.etapa_atual < 6 ? carregamento.etapa_atual + 1 : 6);
+        const proximaEtapa = carregamento.etapa_atual < 6 ? carregamento.etapa_atual + 1 : 6;
+        setSelectedEtapa(proximaEtapa);
       } else {
         setSelectedEtapa(carregamento.etapa_atual > 0 ? carregamento.etapa_atual : 1);
       }
@@ -293,8 +326,16 @@ const CarregamentoDetalhe = () => {
     const etapaNome = ETAPAS.find(e => e.id === selectedEtapa)?.nome || "Etapa";
     const isEtapaDoc = selectedEtapa === 5;
     const isEtapaFinalizada = selectedEtapa === 6;
-    const isEtapaJaConcluida = (carregamento?.etapa_atual ?? 0) >= selectedEtapa;
-    const podeEditar = roles.includes("armazem") && !isEtapaJaConcluida && !isEtapaFinalizada;
+    const etapaAtual = carregamento?.etapa_atual ?? 0;
+    const isEtapaConcluida = etapaAtual >= selectedEtapa;
+    const isProximaEtapa = etapaAtual + 1 === selectedEtapa;
+    const isEtapaFutura = selectedEtapa > etapaAtual + 1;
+    
+    // Só usuário armazém pode editar e apenas a próxima etapa na sequência
+    const podeEditar = roles.includes("armazem") && 
+                      carregamento?.armazem_id === armazemId && 
+                      isProximaEtapa && 
+                      !isEtapaFinalizada;
 
     // Obter dados da etapa atual
     const getEtapaData = () => {
@@ -307,279 +348,4 @@ const CarregamentoDetalhe = () => {
         case 2:
           return {
             data: carregamento?.data_inicio,
-            observacao: carregamento?.observacao_inicio
-          };
-        case 3:
-          return {
-            data: carregamento?.data_carregando,
-            observacao: carregamento?.observacao_carregando
-          };
-        case 4:
-          return {
-            data: carregamento?.data_finalizacao,
-            observacao: carregamento?.observacao_finalizacao
-          };
-        case 5:
-          return {
-            data: carregamento?.data_documentacao,
-            observacao: carregamento?.observacao_documentacao
-          };
-        default:
-          return { data: null, observacao: null };
-      }
-    };
-
-    const etapaData = getEtapaData();
-
-    return (
-      <Card className="mb-8 shadow-sm">
-        <CardContent className="p-6 space-y-6">
-          <div className="border-b pb-4">
-            <h2 className="text-xl font-semibold text-foreground">{etapaNome}</h2>
-            {etapaData.data && (
-              <p className="text-sm text-muted-foreground mt-1">
-                Concluída em: {formatarDataHora(etapaData.data)}
-              </p>
-            )}
-          </div>
-
-          {isEtapaFinalizada ? (
-            <div className="text-center py-8">
-              <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-foreground mb-2">Processo Finalizado</h3>
-              <p className="text-muted-foreground">
-                O carregamento foi concluído com sucesso.
-              </p>
-            </div>
-          ) : (
-            <>
-              {/* Mostrar dados existentes se a etapa já foi concluída */}
-              {isEtapaJaConcluida && (
-                <div className="bg-green-50 border border-green-200 rounded-lg p-4 space-y-3">
-                  <div className="flex items-center gap-2">
-                    <CheckCircle className="w-5 h-5 text-green-600" />
-                    <span className="font-medium text-green-800">Etapa Concluída</span>
-                  </div>
-                  {etapaData.observacao && (
-                    <div>
-                      <span className="text-sm font-medium text-green-700">Observações:</span>
-                      <p className="text-sm text-green-600 mt-1">{etapaData.observacao}</p>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Formulário para edição (apenas se pode editar) */}
-              {podeEditar && (
-                <>
-                  <div className="space-y-4">
-                    <div>
-                      <label className="text-base font-semibold block mb-2">
-                        {isEtapaDoc ? "Anexar Nota Fiscal (PDF) *" : "Anexar foto obrigatória *"}
-                      </label>
-                      <Input
-                        type="file"
-                        accept={isEtapaDoc ? ".pdf" : "image/*"}
-                        onChange={e => setStageFile(e.target.files?.[0] ?? null)}
-                        className="w-full"
-                      />
-                    </div>
-
-                    {isEtapaDoc && (
-                      <div>
-                        <label className="text-base font-semibold block mb-2">
-                          Anexar Arquivo XML
-                        </label>
-                        <Input
-                          type="file"
-                          accept=".xml"
-                          onChange={e => setStageFileXml(e.target.files?.[0] ?? null)}
-                          className="w-full"
-                        />
-                      </div>
-                    )}
-
-                    <div>
-                      <label className="text-base font-semibold block mb-2">
-                        Observações (opcional)
-                      </label>
-                      <Textarea
-                        placeholder={`Digite observações sobre ${etapaNome.toLowerCase()}...`}
-                        value={stageObs}
-                        onChange={e => setStageObs(e.target.value)}
-                        rows={3}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="flex justify-end pt-4">
-                    <Button
-                      disabled={!stageFile}
-                      size="lg"
-                      className="px-8"
-                    >
-                      {selectedEtapa === 5 ? "Finalizar Carregamento" : "Próxima Etapa"}
-                    </Button>
-                  </div>
-                </>
-              )}
-
-              {/* Visualização apenas (se não pode editar mas etapa não está concluída) */}
-              {!podeEditar && !isEtapaJaConcluida && (
-                <div className="text-center py-8 text-muted-foreground">
-                  <p>Aguardando execução desta etapa pelo armazém.</p>
-                </div>
-              )}
-            </>
-          )}
-        </CardContent>
-      </Card>
-    );
-  };
-
-  const renderInformacoesProcesso = () => {
-    const agendamento = carregamento?.agendamento;
-    const tempoTotalDecorrido = processoInicio
-      ? `${Math.round(
-          (Date.now() - processoInicio.getTime()) / 1000 / 60
-        )} min`
-      : "N/A";
-    const tempoTotalFinalizacao = processoInicio
-      ? carregamento.status === "finalizado"
-        ? `${Math.round(
-            ((processoCriacao
-              ? processoCriacao.getTime()
-              : Date.now()) -
-              processoInicio.getTime()) /
-              1000 /
-              60
-          )} min`
-        : "-"
-      : "N/A";
-
-    return (
-      <Card className="shadow-sm">
-        <CardContent className="p-6">
-          <h2 className="text-lg font-semibold mb-6">Informações do Carregamento</h2>
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-2 md:gap-8">
-            <div className="space-y-4">
-              <div>
-                <span className={LABEL_STYLE}>Nome do cliente</span>
-                <span className={VALUE_STYLE}>
-                  {agendamento?.cliente?.nome || "N/A"}
-                </span>
-              </div>
-              <div>
-                <span className={LABEL_STYLE}>Quantidade</span>
-                <span className={VALUE_STYLE}>
-                  {agendamento?.quantidade ?? "N/A"} toneladas
-                </span>
-              </div>
-              <div>
-                <span className={LABEL_STYLE}>Placa caminhão</span>
-                <span className={VALUE_STYLE}>
-                  {agendamento?.placa_caminhao || "N/A"}
-                </span>
-              </div>
-              <div>
-                <span className={LABEL_STYLE}>Motorista</span>
-                <span className={VALUE_STYLE}>
-                  {agendamento?.motorista_nome || "N/A"}
-                </span>
-              </div>
-              <div>
-                <span className={LABEL_STYLE}>Doc. Motorista</span>
-                <span className={VALUE_STYLE}>
-                  {agendamento?.motorista_documento || "N/A"}
-                </span>
-              </div>
-              <div>
-                <span className={LABEL_STYLE}>Número nf</span>
-                <span className={VALUE_STYLE}>
-                  {carregamento.numero_nf || "N/A"}
-                </span>
-              </div>
-            </div>
-            <div className="space-y-4">
-              <div>
-                <span className={LABEL_STYLE}>Status</span>
-                <span className={`${VALUE_STYLE} capitalize`}>
-                  {carregamento.status}
-                </span>
-              </div>
-              <div>
-                <span className={LABEL_STYLE}>Etapa atual</span>
-                <span className={VALUE_STYLE}>
-                  {ETAPAS.find(e => e.id === carregamento.etapa_atual)?.nome || "N/A"}
-                </span>
-              </div>
-              <div>
-                <span className={LABEL_STYLE}>Tempo total decorrido</span>
-                <span className={`${VALUE_STYLE} text-[0.97rem]`}>
-                  {tempoTotalDecorrido}
-                </span>
-              </div>
-              <div>
-                <span className={LABEL_STYLE}>Tempo até finalização</span>
-                <span className={`${VALUE_STYLE} text-[0.97rem]`}>
-                  {tempoTotalFinalizacao}
-                </span>
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-    );
-  };
-
-  if (
-    isLoading ||
-    userId == null ||
-    roles.length === 0 ||
-    (roles.includes("cliente") && clienteId === null) ||
-    (roles.includes("armazem") && armazemId === null)
-  ) {
-    return (
-      <div className="min-h-screen bg-background">
-        <PageHeader title="Detalhes do Carregamento" />
-        <div className="flex justify-center items-center h-40">
-          <Loader2 className="animate-spin h-8 w-8 text-primary" />
-        </div>
-      </div>
-    );
-  }
-  if (error || !carregamento) {
-    return (
-      <div className="min-h-screen bg-background">
-        <PageHeader title="Detalhes do Carregamento" />
-        <div className="container mx-auto py-12">
-          <Card className="border-destructive">
-            <CardContent className="p-6">
-              <div className="text-center text-destructive">
-                <p className="font-semibold">Erro ao carregar carregamento</p>
-                <p className="text-sm mt-2">
-                  {error instanceof Error
-                    ? error.message
-                    : "Erro desconhecido ou sem permissão"}
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="min-h-screen bg-background">
-      <PageHeader title="Detalhes do Carregamento" />
-      <div className="container mx-auto px-1 md:px-4 pt-1 pb-8 gap-4 flex flex-col max-w-[1050px]">
-        {renderEtapasFluxo()}
-        {renderAreaEtapas()}
-        {renderInformacoesProcesso()}
-      </div>
-    </div>
-  );
-};
-
-export default CarregamentoDetalhe;
+            observacao: carregamento
