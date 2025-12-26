@@ -19,6 +19,22 @@ const ETAPAS = [
   { id: 6, nome: "Finalizado", titulo: "Finalizado", campo_data: null, campo_obs: null, campo_url: null },
 ];
 
+// Função para derivar status visual da etapa
+const getStatusFromEtapa = (etapa: number) => {
+  switch (etapa) {
+    case 1:
+    case 2:
+    case 3:
+    case 4:
+    case 5:
+      return { label: "Em Andamento", variant: "default", color: "blue" };
+    case 6:
+      return { label: "Finalizado", variant: "success", color: "green" };
+    default:
+      return { label: "Aguardando", variant: "secondary", color: "gray" };
+  }
+};
+
 const formatarDataHora = (v?: string | null) => {
   if (!v) return "-";
   const d = new Date(v);
@@ -115,7 +131,6 @@ const CarregamentoDetalhe = () => {
         .from("carregamentos")
         .select(`
           id,
-          status,
           etapa_atual,
           numero_nf,
           data_chegada,
@@ -202,12 +217,6 @@ const CarregamentoDetalhe = () => {
         console.log("🔍 [DEBUG] CarregamentoDetalhe - Definindo", etapaConfig.campo_obs, "=", stageObs.trim());
       }
 
-      // Se chegou na etapa 6, marcar como finalizado
-      if (proximaEtapa === 6) {
-        updateData.status = "finalizado";
-        console.log("🔍 [DEBUG] CarregamentoDetalhe - Marcando como finalizado");
-      }
-
       // Upload de arquivos se necessário
       if (stageFile) {
         console.log("🔍 [DEBUG] CarregamentoDetalhe - Fazendo upload do arquivo:", stageFile.name);
@@ -217,7 +226,7 @@ const CarregamentoDetalhe = () => {
         let fileName = '';
         
         if (etapaAtual === 5) {
-          // Etapa 5: Documentação (PDF) - NOME CORRIGIDO
+          // Etapa 5: Documentação (PDF)
           bucket = 'carregamento-documentos';
           fileName = `${carregamento.id}_nota_fiscal_${Date.now()}.${fileExt}`;
           console.log("🔍 [DEBUG] CarregamentoDetalhe - Upload para bucket documentos:", fileName);
@@ -258,7 +267,6 @@ const CarregamentoDetalhe = () => {
         
         const fileName = `${carregamento.id}_xml_${Date.now()}.xml`;
         
-        // NOME CORRIGIDO AQUI TAMBÉM
         const { data: uploadData, error: uploadError } = await supabase.storage
           .from('carregamento-documentos')
           .upload(fileName, stageFileXml);
@@ -366,7 +374,7 @@ const CarregamentoDetalhe = () => {
 
     const agora = new Date();
     const inicio = carregamento.data_chegada ? new Date(carregamento.data_chegada) : null;
-    const fim = carregamento.status === 'finalizado' && carregamento.data_documentacao 
+    const fim = carregamento.etapa_atual === 6 && carregamento.data_documentacao 
       ? new Date(carregamento.data_documentacao) : null;
 
     const tempoTotalDecorrido = inicio 
@@ -407,6 +415,9 @@ const CarregamentoDetalhe = () => {
   };
 
   const stats = calcularEstatisticas();
+
+  // Derivar status visual da etapa
+  const statusVisual = carregamento ? getStatusFromEtapa(carregamento.etapa_atual) : null;
 
   // ----------- COMPONENTES DE LAYOUT -----------
 
@@ -823,13 +834,15 @@ const CarregamentoDetalhe = () => {
               </div>
             </div>
 
-            {/* Linha 3: Status e Etapa */}
+            {/* Linha 3: Status (derivado da etapa) e Etapa */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div className="flex items-center gap-2">
                 <Calendar className="w-4 h-4 text-muted-foreground" />
                 <div className="flex-1 min-w-0">
                   <span className="text-xs text-muted-foreground block">Status</span>
-                  <span className="text-sm font-medium capitalize">{carregamento.status}</span>
+                  <span className="text-sm font-medium" style={{ color: statusVisual?.color }}>
+                    {statusVisual?.label}
+                  </span>
                 </div>
               </div>
               <div className="flex items-center gap-2">
